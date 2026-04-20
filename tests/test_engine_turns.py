@@ -1,8 +1,9 @@
 import pytest
 
 from parques import engine
-from parques.entities import Color, GamePhase, PieceState
+from parques.entities import Color, GamePhase, Move, MoveAction, PieceState
 from parques.exceptions import DuplicatePlayer, WrongPhase
+from tests.conftest import force_dice
 
 
 def test_new_game_sets_setup_phase_and_four_pieces_in_jail():
@@ -186,3 +187,95 @@ def test_third_consecutive_pair_triggers_crowning(scripted_rng):
     assert game.phase is GamePhase.CROWNING
     assert game.consecutive_pairs == 3
     assert game.pending_dice == []  # not filled
+
+
+def test_skip_turn_discards_dice_and_passes_to_next_player(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    force_dice(game, 3, 5)
+    engine.skip_turn(game)
+    assert game.pending_dice == []
+    assert game.phase is GamePhase.ROLLING
+    assert game.current_turn_index == 1
+
+
+def test_skip_turn_rejects_empty_dice(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    game.phase = GamePhase.MOVING
+    game.pending_dice = []
+    with pytest.raises(ValueError):
+        engine.skip_turn(game)
+
+
+def test_skip_turn_rejects_wrong_phase(two_player_game):
+    with pytest.raises(engine.WrongPhase):
+        engine.skip_turn(two_player_game)
+
+
+def test_crown_piece_moves_selected_piece_to_crowned(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    game.phase = GamePhase.CROWNING
+    engine.crown_piece(game, piece_index=1)
+    assert game.players[0].pieces[1].state is PieceState.CROWNED
+    assert game.phase is GamePhase.ROLLING   # same player continues
+    assert game.consecutive_pairs == 0        # reset after crowning
+    assert game.current_turn_index == 0
+
+
+def test_crown_piece_rejects_already_crowned(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    game.players[0].pieces[0].state = PieceState.CROWNED
+    game.phase = GamePhase.CROWNING
+    with pytest.raises(ValueError):
+        engine.crown_piece(game, 0)
+
+
+def test_crown_piece_rejects_invalid_index(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    game.phase = GamePhase.CROWNING
+    with pytest.raises(ValueError):
+        engine.crown_piece(game, 42)
+
+
+def test_fourth_crowned_piece_finishes_game(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    # Put Alice's first 3 pieces already crowned.
+    for i in range(3):
+        game.players[0].pieces[i].state = PieceState.CROWNED
+    # Alice's last piece one step from the goal, in home stretch.
+    last = game.players[0].pieces[3]
+    last.state = PieceState.IN_HOME_STRETCH
+    last.home_stretch_position = 6
+    force_dice(game, 1, 2)
+    engine.apply_move(game, Move(3, 1, MoveAction.REACH_GOAL))
+    assert game.phase is GamePhase.FINISHED
+    assert game.winner == 0

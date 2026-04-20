@@ -115,6 +115,19 @@ def roll_dice(game: Game) -> tuple[int, int]:
     return d1, d2
 
 
+def skip_turn(game: Game) -> None:
+    """MOVING phase: current player skips their turn (no valid moves for pending dice).
+
+    Discards pending dice and passes to the next player.
+    """
+    if game.phase is not GamePhase.MOVING:
+        raise WrongPhase("not in MOVING phase")
+    if not game.pending_dice:
+        raise ValueError("no pending dice to skip")
+    game.pending_dice = []
+    _advance_turn(game)
+
+
 def _advance_turn(game: Game) -> None:
     """Move to next player; reset per-turn counters."""
     game.consecutive_pairs = 0
@@ -267,7 +280,39 @@ def _consume_die(game: Game, die: int) -> None:
     game.pending_dice.remove(die)
 
 
+def crown_piece(game: Game, piece_index: int) -> None:
+    if game.phase is not GamePhase.CROWNING:
+        raise WrongPhase("not in CROWNING phase")
+    if not 0 <= piece_index < 4:
+        raise ValueError(f"piece_index out of range: {piece_index}")
+    player = _current_player(game)
+    piece = player.pieces[piece_index]
+    if piece.state is PieceState.CROWNED:
+        raise ValueError(f"piece {piece_index} already crowned")
+
+    piece.state = PieceState.CROWNED
+    piece.circuit_position = None
+    piece.home_stretch_position = None
+
+    if _check_winner(game):
+        return
+    game.consecutive_pairs = 0
+    game.phase = GamePhase.ROLLING
+
+
+def _check_winner(game: Game) -> bool:
+    player = _current_player(game)
+    if all(p.state is PieceState.CROWNED for p in player.pieces):
+        game.winner = game.turn_order[game.current_turn_index]
+        game.phase = GamePhase.FINISHED
+        game.pending_dice = []
+        return True
+    return False
+
+
 def _finish_move_turn_transition(game: Game) -> None:
+    if _check_winner(game):
+        return
     if game.pending_dice:
         return  # still MOVING; same player picks next
     # Dice exhausted.
