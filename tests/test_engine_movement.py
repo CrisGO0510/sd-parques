@@ -1,0 +1,76 @@
+import pytest
+
+from parques import engine
+from parques.entities import (
+    Color, GamePhase, Move, MoveAction, PieceState,
+)
+from tests.conftest import force_dice
+
+
+def _game_with_piece_on_board(scripted_rng, color=Color.RED, position=10):
+    game = engine.new_game(
+        [("Alice", color), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),  # Alice=11 → first
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    # Hand-place Alice's piece 0 on the circuit.
+    alice_piece = game.players[0].pieces[0]
+    alice_piece.state = PieceState.ON_BOARD
+    alice_piece.circuit_position = position
+    return game
+
+
+def test_available_moves_lists_advance_per_die(scripted_rng):
+    game = _game_with_piece_on_board(scripted_rng, position=10)
+    force_dice(game, 3, 4)
+    moves = engine.available_moves(game)
+    # One piece on board + 2 dice → 2 ADVANCE moves (same piece, d=3 and d=4).
+    assert sorted((m.piece_index, m.dice_value, m.action) for m in moves) == [
+        (0, 3, MoveAction.ADVANCE),
+        (0, 4, MoveAction.ADVANCE),
+    ]
+
+
+def test_available_moves_returns_empty_outside_moving(two_player_game):
+    assert engine.available_moves(two_player_game) == []
+
+
+def test_available_moves_is_deterministic(scripted_rng):
+    """Spec contract: sorted by piece_index asc, then dice_value asc."""
+    game = _game_with_piece_on_board(scripted_rng, position=10)
+    # Give Alice a second piece on board at a different position.
+    alice = game.players[0]
+    alice.pieces[2].state = PieceState.ON_BOARD
+    alice.pieces[2].circuit_position = 20
+    force_dice(game, 3, 5)
+    moves = engine.available_moves(game)
+    keys = [(m.piece_index, m.dice_value) for m in moves]
+    assert keys == sorted(keys)
+
+
+def test_available_moves_includes_exit_jail_on_pair(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    # Alice all in jail. Manually set pending dice to a pair.
+    force_dice(game, 4, 4)
+    game.consecutive_pairs = 1  # simulate we just rolled the pair
+    moves = engine.available_moves(game)
+    actions = {m.action for m in moves}
+    assert MoveAction.EXIT_JAIL in actions
+
+
+def test_available_moves_no_exit_jail_without_pair(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    force_dice(game, 3, 5)
+    moves = engine.available_moves(game)
+    assert MoveAction.EXIT_JAIL not in {m.action for m in moves}

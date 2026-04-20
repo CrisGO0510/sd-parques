@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import random
 
+from parques.board import (
+    BOARD_SIZE, HOME_STRETCH_ENTRY, HOME_STRETCH_SIZE,
+    is_safe, next_position,
+)
 from parques.entities import (
-    Color, Game, GamePhase, Player, PieceState,
+    Color, Game, GamePhase, Move, MoveAction, Player, PieceState,
 )
 # Re-export domain exceptions as engine.X for ergonomic use in tests/clients.
 from parques.exceptions import (  # noqa: F401
@@ -125,3 +129,86 @@ def _current_player(game: Game) -> Player:
 
 def _all_in_jail(player: Player) -> bool:
     return all(p.state is PieceState.IN_JAIL for p in player.pieces)
+
+
+def available_moves(game: Game) -> list[Move]:
+    """Return every legal Move the current player can make."""
+    if game.phase is not GamePhase.MOVING:
+        return []
+
+    player = _current_player(game)
+    moves: list[Move] = []
+
+    is_pair_roll = (
+        len(game.pending_dice) == 2
+        and game.pending_dice[0] == game.pending_dice[1]
+    )
+
+    for piece in player.pieces:
+        if piece.state is PieceState.IN_JAIL and is_pair_roll:
+            moves.append(Move(
+                piece_index=piece.index,
+                dice_value=game.pending_dice[0] + game.pending_dice[1],
+                action=MoveAction.EXIT_JAIL,
+            ))
+
+    # Build a map of enemy-piece positions for capture detection.
+    enemy_positions: dict[int, Player] = {}
+    for other in game.players:
+        if other is player:
+            continue
+        for p in other.pieces:
+            if p.state is PieceState.ON_BOARD and p.circuit_position is not None:
+                enemy_positions[p.circuit_position] = other
+
+    for piece in player.pieces:
+        if piece.state is PieceState.ON_BOARD:
+            entry = HOME_STRETCH_ENTRY[player.color]
+            for die in set(game.pending_dice):
+                # 1) Does this move cross the home-stretch entry?
+                if _crossed_home_entry(piece.circuit_position, die, entry):
+                    overflow = _home_stretch_overflow(
+                        piece.circuit_position, die, entry,
+                    )
+                    if overflow == HOME_STRETCH_SIZE - 1:
+                        action = MoveAction.REACH_GOAL
+                    elif overflow < HOME_STRETCH_SIZE:
+                        action = MoveAction.ENTER_HOME_STRETCH
+                    else:
+                        continue  # overshoot → this die can't be used
+                # 2) Plain circuit move (may be a capture).
+                else:
+                    target = next_position(piece.circuit_position, die)
+                    if target in enemy_positions and not is_safe(target):
+                        action = MoveAction.CAPTURE
+                    else:
+                        action = MoveAction.ADVANCE
+                moves.append(Move(
+                    piece_index=piece.index, dice_value=die, action=action,
+                ))
+
+        elif piece.state is PieceState.IN_HOME_STRETCH:
+            for die in set(game.pending_dice):
+                new_pos = piece.home_stretch_position + die
+                if new_pos == HOME_STRETCH_SIZE - 1:
+                    moves.append(Move(piece.index, die, MoveAction.REACH_GOAL))
+                elif new_pos < HOME_STRETCH_SIZE - 1:
+                    moves.append(Move(piece.index, die, MoveAction.ADVANCE))
+                # else: overshoot, skip this die
+
+        # IN_JAIL is handled by the EXIT_JAIL block (Task 12), CROWNED pieces never move.
+
+    moves.sort(key=lambda m: (m.piece_index, m.dice_value))
+    return moves
+
+
+def _crossed_home_entry(start: int, steps: int, entry: int) -> bool:
+    """True if moving `steps` from `start` passes through or lands beyond `entry`."""
+    distance = (entry - start) % BOARD_SIZE
+    return distance < steps
+
+
+def _home_stretch_overflow(start: int, steps: int, entry: int) -> int:
+    """How many cells into the home stretch (0-indexed) the piece lands."""
+    distance = (entry - start) % BOARD_SIZE
+    return steps - distance - 1
