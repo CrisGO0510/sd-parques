@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import random
 
-from parques.board import (
+from core.board import (
     BOARD_SIZE, EXITS, HOME_STRETCH_ENTRY, HOME_STRETCH_SIZE,
     is_safe, next_position,
 )
-from parques.entities import (
+from core.entities import (
     Color, Game, GamePhase, Move, MoveAction, MoveResult, Piece, Player, PieceState,
 )
 # Re-export domain exceptions as engine.X for ergonomic use in tests/clients.
-from parques.exceptions import (  # noqa: F401
+from core.exceptions import (  # noqa: F401
     DomainError, DuplicatePlayer, InvalidMove, WrongPhase,
 )
 
@@ -23,7 +23,7 @@ def new_game(
 ) -> Game:
     """Create a new game in SETUP phase."""
     if not 2 <= len(players) <= 4:
-        raise ValueError("parques requires between 2 and 4 players")
+        raise ValueError("core requires between 2 and 4 players")
 
     names = [name for name, _ in players]
     colors = [color for _, color in players]

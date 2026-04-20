@@ -1,5 +1,5 @@
 """Parqués core domain package — pure Python, no I/O."""
-from parques.engine import (
+from core.engine import (
     new_game,
     roll_initial,
     roll_dice,
@@ -8,7 +8,7 @@ from parques.engine import (
     skip_turn,
     crown_piece,
 )
-from parques.entities import (
+from core.entities import (
     Color,
     PieceState,
     GamePhase,
@@ -19,7 +19,7 @@ from parques.entities import (
     MoveResult,
     Game,
 )
-from parques.exceptions import (
+from core.exceptions import (
     DomainError,
     WrongPhase,
     InvalidMove,

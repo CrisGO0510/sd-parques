@@ -1,8 +1,8 @@
 import pytest
 
-from parques import engine
-from parques.entities import Color, GamePhase, Move, MoveAction, PieceState
-from parques.exceptions import DuplicatePlayer, WrongPhase
+from core import engine
+from core.entities import Color, GamePhase, Move, MoveAction, PieceState
+from core.exceptions import DuplicatePlayer, WrongPhase
 from tests.conftest import force_dice
 
 

@@ -1,5 +1,5 @@
 import pytest
-from parques.exceptions import (
+from core.exceptions import (
     DomainError, WrongPhase, InvalidMove, DuplicatePlayer,
 )
 

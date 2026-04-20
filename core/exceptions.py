@@ -1,8 +1,8 @@
-"""Domain-level exceptions for parques."""
+"""Domain-level exceptions for core."""
 
 
 class DomainError(Exception):
-    """Base class for all parques domain errors."""
+    """Base class for all core domain errors."""
 
 
 class WrongPhase(DomainError):

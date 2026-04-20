@@ -1,5 +1,5 @@
 """Board layout constants and pure helpers."""
-from parques.entities import Color
+from core.entities import Color
 
 BOARD_SIZE = 96
 HOME_STRETCH_SIZE = 8

@@ -1,7 +1,7 @@
 import pytest
-from parques import engine
-from parques.board import HOME_STRETCH_ENTRY, HOME_STRETCH_SIZE
-from parques.entities import Color, Move, MoveAction, PieceState
+from core import engine
+from core.board import HOME_STRETCH_ENTRY, HOME_STRETCH_SIZE
+from core.entities import Color, Move, MoveAction, PieceState
 from tests.conftest import force_dice
 
 

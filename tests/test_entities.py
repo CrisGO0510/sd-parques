@@ -1,4 +1,4 @@
-from parques.entities import (
+from core.entities import (
     Color, PieceState, GamePhase, MoveAction,
     Piece, Player, Move, MoveResult, Game,
 )

@@ -1,8 +1,8 @@
 import pytest
 
-from parques import engine
-from parques.board import EXITS
-from parques.entities import (
+from core import engine
+from core.board import EXITS
+from core.entities import (
     Color, GamePhase, Move, MoveAction, MoveResult, PieceState,
 )
 from tests.conftest import force_dice

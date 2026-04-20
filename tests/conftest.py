@@ -1,9 +1,9 @@
-"""Shared fixtures and helpers for parques tests."""
+"""Shared fixtures and helpers for core tests."""
 from __future__ import annotations
 
 import pytest
 
-from parques.entities import Color, GamePhase
+from core.entities import Color, GamePhase
 
 
 class ScriptedRandom:
@@ -34,7 +34,7 @@ def scripted_rng():
 @pytest.fixture
 def two_player_game(scripted_rng):
     """Fresh game in SETUP phase with Alice (RED) and Bob (BLUE)."""
-    from parques import engine
+    from core import engine
     return engine.new_game(
         [("Alice", Color.RED), ("Bob", Color.BLUE)],
         rng=scripted_rng([]),

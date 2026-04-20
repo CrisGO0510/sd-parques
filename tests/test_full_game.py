@@ -1,6 +1,6 @@
 """End-to-end smoke: a mini-game driven by scripted dice."""
-from parques import engine
-from parques.entities import (
+from core import engine
+from core.entities import (
     Color, GamePhase, PieceState, Move, MoveAction,
 )
 from tests.conftest import ScriptedRandom

@@ -1,10 +1,10 @@
 import pytest
-from parques.board import (
+from core.board import (
     BOARD_SIZE, HOME_STRETCH_SIZE,
     EXITS, SAFES, HOME_STRETCH_ENTRY,
     is_safe, exit_position, home_stretch_entry_for, next_position,
 )
-from parques.entities import Color
+from core.entities import Color
 
 
 def test_board_size_is_96():

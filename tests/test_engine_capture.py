@@ -1,7 +1,7 @@
 import pytest
-from parques import engine
-from parques.entities import Color, Move, MoveAction, PieceState
-from parques.board import is_safe
+from core import engine
+from core.entities import Color, Move, MoveAction, PieceState
+from core.board import is_safe
 from tests.conftest import force_dice
 
 

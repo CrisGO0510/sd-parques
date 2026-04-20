@@ -1,4 +1,4 @@
-"""Domain entities for the parques game core."""
+"""Domain entities for the core game core."""
 from dataclasses import dataclass, field
 from enum import Enum
 
