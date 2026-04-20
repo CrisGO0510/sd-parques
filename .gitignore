@@ -10,3 +10,6 @@ dist/
 .idea/
 .superpowers/
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
