@@ -1,8 +1,9 @@
 import pytest
 
 from parques import engine
+from parques.board import EXITS
 from parques.entities import (
-    Color, GamePhase, Move, MoveAction, PieceState,
+    Color, GamePhase, Move, MoveAction, MoveResult, PieceState,
 )
 from tests.conftest import force_dice
 
@@ -74,3 +75,60 @@ def test_available_moves_no_exit_jail_without_pair(scripted_rng):
     force_dice(game, 3, 5)
     moves = engine.available_moves(game)
     assert MoveAction.EXIT_JAIL not in {m.action for m in moves}
+
+
+def test_apply_move_advance_consumes_one_die_and_updates_piece(scripted_rng):
+    game = _game_with_piece_on_board(scripted_rng, position=10)
+    force_dice(game, 3, 5)
+    move = Move(piece_index=0, dice_value=3, action=MoveAction.ADVANCE)
+    result = engine.apply_move(game, move)
+    assert result.action is MoveAction.ADVANCE
+    assert game.players[0].pieces[0].circuit_position == 13
+    assert game.pending_dice == [5]
+    assert game.phase is GamePhase.MOVING
+
+
+def test_apply_move_advances_turn_when_dice_exhausted_non_pair(scripted_rng):
+    game = _game_with_piece_on_board(scripted_rng, position=10)
+    force_dice(game, 3, 5)
+    engine.apply_move(game, Move(0, 3, MoveAction.ADVANCE))
+    engine.apply_move(game, Move(0, 5, MoveAction.ADVANCE))
+    assert game.phase is GamePhase.ROLLING
+    assert game.current_turn_index == 1  # Bob's turn
+
+
+def test_apply_move_rolling_again_after_pair(scripted_rng):
+    game = _game_with_piece_on_board(scripted_rng, position=10)
+    force_dice(game, 4, 4)
+    game.consecutive_pairs = 1  # simulate roll_dice having bumped it
+    engine.apply_move(game, Move(0, 4, MoveAction.ADVANCE))
+    engine.apply_move(game, Move(0, 4, MoveAction.ADVANCE))
+    assert game.phase is GamePhase.ROLLING
+    assert game.current_turn_index == 0  # still Alice
+
+
+def test_apply_move_rejects_unknown_move(scripted_rng):
+    game = _game_with_piece_on_board(scripted_rng, position=10)
+    force_dice(game, 3, 5)
+    with pytest.raises(engine.InvalidMove):
+        engine.apply_move(game, Move(0, 6, MoveAction.ADVANCE))  # no die 6
+
+
+def test_apply_move_exit_jail_places_piece_on_exit_and_consumes_pair(scripted_rng):
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    force_dice(game, 4, 4)
+    game.consecutive_pairs = 1
+
+    total = 4 + 4
+    move = Move(piece_index=0, dice_value=total, action=MoveAction.EXIT_JAIL)
+    engine.apply_move(game, move)
+    piece = game.players[0].pieces[0]
+    assert piece.state is PieceState.ON_BOARD
+    assert piece.circuit_position == EXITS[Color.RED]
+    assert game.pending_dice == []   # both dice consumed by the pair
+    assert game.phase is GamePhase.ROLLING  # re-roll (pair)

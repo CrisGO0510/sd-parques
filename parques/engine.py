@@ -4,11 +4,11 @@ from __future__ import annotations
 import random
 
 from parques.board import (
-    BOARD_SIZE, HOME_STRETCH_ENTRY, HOME_STRETCH_SIZE,
+    BOARD_SIZE, EXITS, HOME_STRETCH_ENTRY, HOME_STRETCH_SIZE,
     is_safe, next_position,
 )
 from parques.entities import (
-    Color, Game, GamePhase, Move, MoveAction, Player, PieceState,
+    Color, Game, GamePhase, Move, MoveAction, MoveResult, Piece, Player, PieceState,
 )
 # Re-export domain exceptions as engine.X for ergonomic use in tests/clients.
 from parques.exceptions import (  # noqa: F401
@@ -202,6 +202,82 @@ def available_moves(game: Game) -> list[Move]:
     return moves
 
 
+def apply_move(game: Game, move: Move) -> MoveResult:
+    if game.phase is not GamePhase.MOVING:
+        raise WrongPhase("not in MOVING phase")
+    if move not in available_moves(game):
+        raise InvalidMove(f"move not in available_moves: {move!r}")
+
+    player = _current_player(game)
+    piece = player.pieces[move.piece_index]
+
+    result: MoveResult
+    if move.action is MoveAction.ADVANCE and piece.state is PieceState.ON_BOARD:
+        piece.circuit_position = next_position(piece.circuit_position, move.dice_value)
+        result = MoveResult(action=MoveAction.ADVANCE)
+    elif move.action is MoveAction.EXIT_JAIL:
+        piece.state = PieceState.ON_BOARD
+        piece.circuit_position = EXITS[player.color]
+        # EXIT_JAIL consumes BOTH dice of the pair.
+        game.pending_dice = []
+        _finish_move_turn_transition(game)
+        return MoveResult(action=MoveAction.EXIT_JAIL)
+    elif move.action is MoveAction.CAPTURE and piece.state is PieceState.ON_BOARD:
+        target = next_position(piece.circuit_position, move.dice_value)
+        captured = _capture_at(game, target, player)
+        piece.circuit_position = target
+        _consume_die(game, move.dice_value)
+        _finish_move_turn_transition(game)
+        return MoveResult(action=MoveAction.CAPTURE, captured=captured)
+    elif move.action is MoveAction.ENTER_HOME_STRETCH and piece.state is PieceState.ON_BOARD:
+        entry = HOME_STRETCH_ENTRY[player.color]
+        overflow = _home_stretch_overflow(
+            piece.circuit_position, move.dice_value, entry,
+        )
+        piece.state = PieceState.IN_HOME_STRETCH
+        piece.circuit_position = None
+        piece.home_stretch_position = overflow
+        _consume_die(game, move.dice_value)
+        _finish_move_turn_transition(game)
+        return MoveResult(action=MoveAction.ENTER_HOME_STRETCH)
+    elif move.action is MoveAction.REACH_GOAL:
+        piece.state = PieceState.CROWNED
+        piece.circuit_position = None
+        piece.home_stretch_position = None
+        _consume_die(game, move.dice_value)
+        # Win detection is handled in Task 20.
+        _finish_move_turn_transition(game)
+        return MoveResult(action=MoveAction.REACH_GOAL, reached_goal=True)
+    elif move.action is MoveAction.ADVANCE and piece.state is PieceState.IN_HOME_STRETCH:
+        piece.home_stretch_position += move.dice_value
+        _consume_die(game, move.dice_value)
+        _finish_move_turn_transition(game)
+        return MoveResult(action=MoveAction.ADVANCE)
+    else:
+        raise NotImplementedError(
+            f"Task 15 only handles ADVANCE on circuit; got {move.action}"
+        )
+
+    _consume_die(game, move.dice_value)
+    _finish_move_turn_transition(game)
+    return result
+
+
+def _consume_die(game: Game, die: int) -> None:
+    game.pending_dice.remove(die)
+
+
+def _finish_move_turn_transition(game: Game) -> None:
+    if game.pending_dice:
+        return  # still MOVING; same player picks next
+    # Dice exhausted.
+    was_pair = game.consecutive_pairs > 0
+    if was_pair and game.consecutive_pairs < 3:
+        game.phase = GamePhase.ROLLING   # same player re-rolls
+    else:
+        _advance_turn(game)
+
+
 def _crossed_home_entry(start: int, steps: int, entry: int) -> bool:
     """True if moving `steps` from `start` passes through or lands beyond `entry`."""
     distance = (entry - start) % BOARD_SIZE
@@ -212,3 +288,20 @@ def _home_stretch_overflow(start: int, steps: int, entry: int) -> int:
     """How many cells into the home stretch (0-indexed) the piece lands."""
     distance = (entry - start) % BOARD_SIZE
     return steps - distance - 1
+
+
+def _capture_at(game: Game, position: int, attacker: Player) -> Piece | None:
+    for other in game.players:
+        if other is attacker:
+            continue
+        for p in other.pieces:
+            if p.state is PieceState.ON_BOARD and p.circuit_position == position:
+                captured_snapshot = Piece(
+                    index=p.index,
+                    state=PieceState.ON_BOARD,
+                    circuit_position=position,
+                )
+                p.state = PieceState.IN_JAIL
+                p.circuit_position = None
+                return captured_snapshot
+    return None

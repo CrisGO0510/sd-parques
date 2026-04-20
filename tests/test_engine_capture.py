@@ -67,3 +67,22 @@ def test_move_onto_own_piece_is_plain_advance(scripted_rng):
     # Alice piece 0 + dice 3 → lands on her own piece 1 at 13 → ADVANCE.
     m = next(m for m in moves if m.piece_index == 0 and m.dice_value == 3)
     assert m.action is MoveAction.ADVANCE
+
+
+def test_apply_move_capture_sends_rival_to_jail(scripted_rng):
+    game = _game_setup(scripted_rng)
+    alice = game.players[0].pieces[0]
+    alice.state = PieceState.ON_BOARD
+    alice.circuit_position = 10
+    bob = game.players[1].pieces[0]
+    bob.state = PieceState.ON_BOARD
+    bob.circuit_position = 13
+
+    force_dice(game, 3, 5)
+    result = engine.apply_move(game, Move(0, 3, MoveAction.CAPTURE))
+    assert result.action is MoveAction.CAPTURE
+    assert result.captured is not None
+    assert result.captured.index == 0
+    assert bob.state is PieceState.IN_JAIL
+    assert bob.circuit_position is None
+    assert alice.circuit_position == 13

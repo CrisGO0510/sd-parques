@@ -1,7 +1,7 @@
 import pytest
 from parques import engine
 from parques.board import HOME_STRETCH_ENTRY, HOME_STRETCH_SIZE
-from parques.entities import Color, MoveAction, PieceState
+from parques.entities import Color, Move, MoveAction, PieceState
 from tests.conftest import force_dice
 
 
@@ -72,3 +72,38 @@ def test_piece_in_home_stretch_protected_no_capture(scripted_rng):
     game.players[1].pieces[0].circuit_position = 5
     moves = engine.available_moves(game)
     assert all(m.action is not MoveAction.CAPTURE for m in moves)
+
+
+def test_apply_enter_home_stretch_sets_state_and_position(scripted_rng):
+    game = _game_setup(scripted_rng)
+    piece = game.players[0].pieces[0]
+    piece.state = PieceState.ON_BOARD
+    piece.circuit_position = HOME_STRETCH_ENTRY[Color.RED] - 2  # 69
+    force_dice(game, 3, 1)
+    engine.apply_move(game, Move(0, 3, MoveAction.ENTER_HOME_STRETCH))
+    assert piece.state is PieceState.IN_HOME_STRETCH
+    assert piece.circuit_position is None
+    # Overflow 0 → home_stretch_position 0.
+    assert piece.home_stretch_position == 0
+
+
+def test_apply_advance_within_home_stretch(scripted_rng):
+    game = _game_setup(scripted_rng)
+    piece = game.players[0].pieces[0]
+    piece.state = PieceState.IN_HOME_STRETCH
+    piece.home_stretch_position = 3
+    force_dice(game, 2, 1)
+    engine.apply_move(game, Move(0, 2, MoveAction.ADVANCE))
+    assert piece.home_stretch_position == 5
+    assert piece.state is PieceState.IN_HOME_STRETCH
+
+
+def test_apply_reach_goal_marks_piece_crowned(scripted_rng):
+    game = _game_setup(scripted_rng)
+    piece = game.players[0].pieces[0]
+    piece.state = PieceState.IN_HOME_STRETCH
+    piece.home_stretch_position = 5
+    force_dice(game, 2, 6)
+    engine.apply_move(game, Move(0, 2, MoveAction.REACH_GOAL))
+    assert piece.state is PieceState.CROWNED
+    assert piece.home_stretch_position is None
