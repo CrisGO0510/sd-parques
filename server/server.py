@@ -178,7 +178,10 @@ class Server:
         for conn_id in self.session.all_conn_ids():
             conn = self._connections.get(conn_id)
             if conn:
-                conn.send(data)
+                try:
+                    conn.send(data)
+                except OSError:
+                    pass
 
     # --- entry point ---
 

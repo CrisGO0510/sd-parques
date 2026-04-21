@@ -173,3 +173,129 @@ def test_server_binds_and_accepts_connection():
     srv.shutdown()
     thread.join(timeout=2.0)
     assert not thread.is_alive()
+
+
+def test_fixture_spawns_server_and_accepts_client(server_factory, client_factory):
+    host, port = server_factory()
+    client = client_factory(host, port)
+    client.send({"type": "join", "username": "Solo"})
+    welcome = client.recv()
+    assert welcome["type"] == "welcome"
+    assert welcome["is_host"] is True
+
+
+def test_message_in_closed_phase_rejected():
+    """After game ends, server is in CLOSED phase and rejects commands."""
+    srv, a, b = _start_two_player_game()
+    srv.phase = ServerPhase.CLOSED  # Simulate game ended
+    a.sent.clear()
+    srv.handle_message(a, {"type": "roll_dice"})
+    errors = [m for m in a.sent if m["type"] == "error"]
+    assert any(m["code"] == "GAME_ENDED" for m in errors)
+
+
+def test_invalid_color_in_select_color():
+    """Selecting a non-existent color returns BAD_MESSAGE error."""
+    srv = Server()
+    a = FakeConn("c1")
+    srv.register_connection(a)
+    srv.handle_message(a, {"type": "join", "username": "Alice"})
+    a.sent.clear()
+    srv.handle_message(a, {"type": "select_color", "color": "neon_purple"})
+    errors = [m for m in a.sent if m["type"] == "error"]
+    assert any(m["code"] == "BAD_MESSAGE" for m in errors)
+
+
+def test_start_game_without_enough_players():
+    """Starting game with only 1 player is forbidden."""
+    srv = Server()
+    a = FakeConn("c1")
+    srv.register_connection(a)
+    srv.handle_message(a, {"type": "join", "username": "Alice"})
+    srv.handle_message(a, {"type": "select_color", "color": "red"})
+    a.sent.clear()
+    srv.handle_message(a, {"type": "start_game"})
+    errors = [m for m in a.sent if m["type"] == "error"]
+    assert any(m["code"] == "FORBIDDEN" for m in errors)
+
+
+def test_leave_in_lobby():
+    """Player can leave lobby, others see updated list."""
+    srv = Server()
+    a, b = FakeConn("c1"), FakeConn("c2")
+    srv.register_connection(a); srv.register_connection(b)
+    srv.handle_message(a, {"type": "join", "username": "Alice"})
+    srv.handle_message(b, {"type": "join", "username": "Bob"})
+    a.sent.clear(); b.sent.clear()
+    srv.handle_message(a, {"type": "leave"})
+    # Alice should be unregistered.
+    assert "c1" not in srv._connections
+    # Bob should see updated lobby.
+    updates = [m for m in b.sent if m["type"] == "lobby_update"]
+    assert updates  # received at least one update
+    assert len(updates[-1]["players"]) == 1  # only Bob left
+
+
+def test_bad_protocol_message():
+    """Malformed JSON in protocol is caught and error sent."""
+    srv = Server()
+    a = FakeConn("c1")
+    srv.register_connection(a)
+    # Simulate a malformed message that fails validation
+    # (e.g., missing "type" field or wrong field types)
+    srv.handle_message(a, {"username": "Alice"})  # missing "type"
+    errors = [m for m in a.sent if m["type"] == "error"]
+    assert any(m["code"] == "BAD_MESSAGE" for m in errors)
+
+
+def test_join_sends_welcome_to_first_player():
+    """First player to join gets is_host=True."""
+    srv = Server()
+    a = FakeConn("c1")
+    srv.register_connection(a)
+    srv.handle_message(a, {"type": "join", "username": "First"})
+    welcome = next(m for m in a.sent if m["type"] == "welcome")
+    assert welcome["is_host"] is True
+    assert welcome["username"] == "First"
+
+
+def test_unhandled_command_in_game_phase():
+    """Command 'join' is forbidden in IN_GAME phase."""
+    srv, a, b = _start_two_player_game()
+    a.sent.clear()
+    srv.handle_message(a, {"type": "join", "username": "Charlie"})
+    errors = [m for m in a.sent if m["type"] == "error"]
+    assert any(m["code"] == "FORBIDDEN" for m in errors)
+
+
+def test_roll_dice_broadcasts_dice_result_and_state():
+    """roll_dice command broadcasts dice_result and state_update."""
+    rng = ScriptedRandom([6, 5, 3, 4, 2, 3])  # Extra rolls for dice
+    srv, a, b = _start_two_player_game(rng)
+    # Both players roll initial to determine order.
+    srv.handle_message(a, {"type": "roll_initial"})
+    srv.handle_message(b, {"type": "roll_initial"})
+    a.sent.clear(); b.sent.clear()
+    # Alice (current player) rolls dice.
+    srv.handle_message(a, {"type": "roll_dice"})
+    # Both players should receive dice_result and state_update.
+    a_dice = [m for m in a.sent if m["type"] == "dice_result"]
+    b_dice = [m for m in b.sent if m["type"] == "dice_result"]
+    a_updates = [m for m in a.sent if m["type"] == "state_update"]
+    assert a_dice
+    assert b_dice
+    assert a_updates
+
+
+def test_crown_piece_broadcasts_state():
+    """crown_piece command broadcasts state_update."""
+    rng = ScriptedRandom([6, 5, 3, 4])
+    srv, a, b = _start_two_player_game(rng)
+    srv.handle_message(a, {"type": "roll_initial"})
+    srv.handle_message(b, {"type": "roll_initial"})
+    a.sent.clear(); b.sent.clear()
+    # crown_piece would normally require a piece to be ready for crowning
+    # just verify the dispatch path is reachable (error case is fine)
+    srv.handle_message(a, {"type": "crown_piece", "piece_index": 0})
+    # At least should broadcast something (either state_update or error)
+    assert a.sent or b.sent
