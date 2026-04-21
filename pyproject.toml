@@ -5,11 +5,13 @@ description = "Domain core for the distributed Parqués game."
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+ws  = ["websockets>=13"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "tests_server"]
 addopts = "-ra"
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["setuptools>=68"]
