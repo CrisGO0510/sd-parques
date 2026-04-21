@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Parques Distribuido</string>
-    <string name="title_activity_main">Parques Distribuido</string>
-    <string name="package_name">com.parques.distribuido</string>
-    <string name="custom_url_scheme">com.parques.distribuido</string>
-</resources>
