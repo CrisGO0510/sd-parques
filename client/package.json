@@ -1,0 +1,51 @@
+{
+  "name": "parques-client",
+  "version": "0.0.1",
+  "description": "A Quasar v2 TypeScript client for Parques game",
+  "productName": "Parques Client",
+  "author": "CrisGO <cridargrajales@utp.edu.co>",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "quasar dev",
+    "build": "quasar build",
+    "build:android": "quasar build -m capacitor -T android",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "typecheck": "vue-tsc --noEmit",
+    "postinstall": "quasar prepare"
+  },
+  "dependencies": {
+    "@quasar/extras": "^1.16.4",
+    "pinia": "^3.0.1",
+    "quasar": "^2.16.0",
+    "vue": "^3.5.22",
+    "vue-router": "^5.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@quasar/app-vite": "^2.5.1",
+    "@types/node": "^22.19.11",
+    "@vitest/coverage-v8": "^4.1.5",
+    "@vue/eslint-config-typescript": "^14.7.0",
+    "@vue/test-utils": "^2.4.6",
+    "autoprefixer": "^10.4.27",
+    "eslint": "^9.39.4",
+    "eslint-plugin-vue": "^10.8.0",
+    "globals": "^17.4.0",
+    "happy-dom": "^20.9.0",
+    "typescript": "^5.9.3",
+    "vite-plugin-checker": "^0.12.0",
+    "vitest": "^4.1.5",
+    "vue-eslint-parser": "^10.4.0",
+    "vue-tsc": "^3.2.7"
+  },
+  "engines": {
+    "node": "^28 || ^26 || ^24 || ^22.12",
+    "npm": ">= 6.13.4",
+    "yarn": ">= 1.21.1",
+    "pnpm": ">= 10.0.0"
+  }
+}
