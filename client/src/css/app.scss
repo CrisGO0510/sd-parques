@@ -1,1 +1,21 @@
 // app global css
+
+// Game-specific colors.
+:root {
+  --parques-red:    #e74c3c;
+  --parques-blue:   #3498db;
+  --parques-green:  #27ae60;
+  --parques-yellow: #f1c40f;
+  --parques-safe:   #c8e6c9;
+}
+
+.piece-circle {
+  transition: cx 0.3s ease, cy 0.3s ease;
+  stroke: #333;
+  stroke-width: 2;
+}
+
+.piece-circle.selectable {
+  filter: drop-shadow(0 0 6px gold);
+  cursor: pointer;
+}

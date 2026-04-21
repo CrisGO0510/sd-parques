@@ -5,7 +5,8 @@ import {
   createWebHashHistory,
   createWebHistory,
 } from 'vue-router';
-import routes from './routes';
+import routes, { Route } from './routes';
+import { ConnectionStatus, useConnectionStore } from 'src/stores/connection';
 
 /*
  * If not building with SSR mode, you can
@@ -16,10 +17,10 @@ import routes from './routes';
  * with the Router instance.
  */
 
-export default defineRouter((/* { store, ssrContext } */) => {
-  const createHistory = process.env.SERVER
+export default defineRouter(function (/* { store, ssrContext } */) {
+  const createHistory = process.env['SERVER']
     ? createMemoryHistory
-    : (process.env.VUE_ROUTER_MODE === 'history' ? createWebHistory : createWebHashHistory);
+    : (process.env['VUE_ROUTER_MODE'] === 'history' ? createWebHistory : createWebHashHistory);
 
   const Router = createRouter({
     scrollBehavior: () => ({ left: 0, top: 0 }),
@@ -28,7 +29,17 @@ export default defineRouter((/* { store, ssrContext } */) => {
     // Leave this as is and make changes in quasar.conf.js instead!
     // quasar.conf.js -> build -> vueRouterMode
     // quasar.conf.js -> build -> publicPath
-    history: createHistory(process.env.VUE_ROUTER_BASE),
+    history: createHistory(process.env['VUE_ROUTER_BASE']),
+  });
+
+  Router.beforeEach((to) => {
+    if (to.meta['requiresConnection']) {
+      const conn = useConnectionStore();
+      if (conn.status !== ConnectionStatus.CONNECTED) {
+        return Route.CONNECT;
+      }
+    }
+    return true;
   });
 
   return Router;

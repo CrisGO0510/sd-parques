@@ -1,18 +1,37 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+export enum Route {
+  CONNECT = '/connect',
+  LOBBY   = '/lobby',
+  GAME    = '/game',
+  END     = '/end',
+}
+
 const routes: RouteRecordRaw[] = [
+  { path: '/',           redirect: Route.CONNECT },
   {
     path: '/',
     component: () => import('layouts/MainLayout.vue'),
-    children: [{ path: '', component: () => import('pages/IndexPage.vue') }],
+    children: [
+      { path: Route.CONNECT, component: () => import('pages/ConnectPage.vue') },
+      {
+        path: Route.LOBBY,
+        component: () => import('pages/LobbyPage.vue'),
+        meta: { requiresConnection: true },
+      },
+      {
+        path: Route.GAME,
+        component: () => import('pages/GamePage.vue'),
+        meta: { requiresConnection: true },
+      },
+      {
+        path: Route.END,
+        component: () => import('pages/EndPage.vue'),
+        meta: { requiresConnection: true },
+      },
+    ],
   },
-
-  // Always leave this as last one,
-  // but you can also remove it
-  {
-    path: '/:catchAll(.*)*',
-    component: () => import('pages/ErrorNotFound.vue'),
-  },
+  { path: '/:catchAll(.*)*', redirect: Route.CONNECT },
 ];
 
 export default routes;
