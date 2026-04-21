@@ -8,7 +8,7 @@ requires-python = ">=3.11"
 dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "tests_server"]
 addopts = "-ra"
 
 [build-system]
@@ -16,5 +16,5 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["core*"]
-exclude = ["tests*", "_legacy*"]
+include = ["core*", "server*"]
+exclude = ["tests*", "tests_server*", "_legacy*"]
