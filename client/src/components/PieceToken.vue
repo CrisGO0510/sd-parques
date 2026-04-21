@@ -50,6 +50,8 @@ const position = computed<Point | null>(() => {
       return homeStretchCellCenter(props.color, props.piece.home_stretch_position);
     case PieceState.CROWNED:
       return null;  // not rendered on the board
+    default:
+      return null;
   }
 });
 </script>
