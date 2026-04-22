@@ -14,7 +14,11 @@ export default defineConfigWithVueTs(
      *
      * ESLint requires "ignores" key to be the only one in this object
      */
-    // ignores: []
+    ignores: [
+      'scripts/**',        // developer utility scripts, not part of the app
+      'coverage/**',       // Vitest coverage output
+      'src-capacitor/**',  // generated Capacitor project (has its own tooling)
+    ]
   },
 
   pluginQuasar.configs.recommended(),

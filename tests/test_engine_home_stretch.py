@@ -17,14 +17,14 @@ def _game_setup(scripted_rng):
 
 def test_advance_over_home_entry_becomes_enter_home_stretch(scripted_rng):
     game = _game_setup(scripted_rng)
-    red_entry = HOME_STRETCH_ENTRY[Color.RED]  # 71
+    red_entry = HOME_STRETCH_ENTRY[Color.RED]  # 86
     piece = game.players[0].pieces[0]
     piece.state = PieceState.ON_BOARD
-    piece.circuit_position = red_entry - 2  # 69
+    piece.circuit_position = red_entry - 2  # 84
 
     force_dice(game, 3, 5)
     moves = engine.available_moves(game)
-    # With 3 dice → target is 72, which is past entry 71 → ENTER_HOME_STRETCH.
+    # With 3 dice → target is entry+1, which is past entry → ENTER_HOME_STRETCH.
     m = next(m for m in moves if m.dice_value == 3)
     assert m.action is MoveAction.ENTER_HOME_STRETCH
 
@@ -78,7 +78,7 @@ def test_apply_enter_home_stretch_sets_state_and_position(scripted_rng):
     game = _game_setup(scripted_rng)
     piece = game.players[0].pieces[0]
     piece.state = PieceState.ON_BOARD
-    piece.circuit_position = HOME_STRETCH_ENTRY[Color.RED] - 2  # 69
+    piece.circuit_position = HOME_STRETCH_ENTRY[Color.RED] - 2  # 84
     force_dice(game, 3, 1)
     engine.apply_move(game, Move(0, 3, MoveAction.ENTER_HOME_STRETCH))
     assert piece.state is PieceState.IN_HOME_STRETCH

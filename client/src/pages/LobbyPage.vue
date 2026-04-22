@@ -42,7 +42,6 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import { useQuasar } from 'quasar';
 import { useLobbyStore } from 'src/stores/lobby';
 import { useGameStore } from 'src/stores/game';
 import { useServerProtocol } from 'src/composables/useServerProtocol';
@@ -50,21 +49,17 @@ import { ClientCommandType, ServerEventType } from 'src/types/protocol';
 import { Color } from 'src/types/domain';
 import { Route } from 'src/router/routes';
 
-const $q     = useQuasar();
 const router = useRouter();
 const lobby  = useLobbyStore();
 const game   = useGameStore();
 
+// LOBBY_UPDATE / ERROR are handled in MainLayout (useAppEventSync). We only
+// own GAME_STARTED here for the navigation: pass myColor into the game
+// store and push to /game.
 const { send } = useServerProtocol({
-  [ServerEventType.LOBBY_UPDATE]: (e) => {
-    lobby.updateFromLobbyUpdate(e.players, e.available_colors);
-  },
   [ServerEventType.GAME_STARTED]: () => {
     game.myColor = lobby.myColor;
     void router.push(Route.GAME);
-  },
-  [ServerEventType.ERROR]: (e) => {
-    $q.notify({ color: 'negative', message: e.message });
   },
 });
 

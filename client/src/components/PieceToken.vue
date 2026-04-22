@@ -1,8 +1,9 @@
 <template>
   <circle
     v-if="position"
-    :cx="position.x" :cy="position.y" :r="18"
+    :cx="position.x" :cy="position.y" :r="PIECE_RADIUS"
     :fill="fill"
+    stroke="#222" stroke-width="3"
     class="piece-circle"
     :class="{ selectable }"
     @click="$emit('click')"
@@ -17,6 +18,7 @@ import {
   circuitCellCenter,
   homeStretchCellCenter,
   jailSlotCenter,
+  PIECE_RADIUS,
 } from 'src/composables/useBoardGeometry';
 
 interface Point { x: number; y: number }

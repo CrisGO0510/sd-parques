@@ -74,7 +74,10 @@ export const useConnectionStore = defineStore('connection', () => {
       socket.close();
       socket = null;
     }
-    handlers.length = 0;
+    // Do NOT clear handlers here — they belong to the components that
+    // registered them (MainLayout, pages). Each component's onUnmounted()
+    // unsubscribes its own handler. Clearing indiscriminately would drop the
+    // layout-level handler that must survive a disconnect/reconnect cycle.
     status.value = ConnectionStatus.DISCONNECTED;
   }
 

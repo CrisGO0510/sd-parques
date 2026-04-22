@@ -89,13 +89,16 @@ def test_roll_dice_fills_pending_dice_and_moves_to_moving(scripted_rng):
     )
     engine.roll_initial(game, 0)   # Alice=11
     engine.roll_initial(game, 1)   # Bob=7 → Alice first
-    # Alice has pieces out of jail? No, still all in jail.
-    # But first roll sets initial_rolls_remaining=3.
+    # Put Alice's piece 0 on the board so the "all in jail" branch does NOT
+    # fire (that branch keeps pending_dice empty and phase ROLLING on
+    # non-pair, which would mask the assertion below).
+    alice_piece = game.players[0].pieces[0]
+    alice_piece.state = PieceState.ON_BOARD
+    alice_piece.circuit_position = 10
     d1, d2 = engine.roll_dice(game)
     assert (d1, d2) == (2, 3)
     assert game.pending_dice == [2, 3]
-    # Not a pair and all pieces in jail → counts against the 3 opportunities.
-    # (full behaviour tested in Task 9)
+    assert game.phase is GamePhase.MOVING
 
 
 def test_roll_dice_rejects_wrong_phase(two_player_game):
@@ -103,8 +106,11 @@ def test_roll_dice_rejects_wrong_phase(two_player_game):
         engine.roll_dice(two_player_game)
 
 
-def test_all_in_jail_initializes_three_opportunities(scripted_rng):
+def test_all_in_jail_non_pair_stays_in_rolling_with_attempts_left(scripted_rng):
     # Alice wins first turn. All pieces in jail. First roll non-pair (2,3).
+    # The engine must stay in ROLLING (no pending_dice) so she can roll again,
+    # instead of forcing her into MOVING where the only option is skip_turn
+    # (which would reset her 3-attempt counter).
     game = engine.new_game(
         [("Alice", Color.RED), ("Bob", Color.BLUE)],
         rng=scripted_rng([6, 5, 3, 4,  # initial rolls: Alice=11, Bob=7
@@ -113,10 +119,14 @@ def test_all_in_jail_initializes_three_opportunities(scripted_rng):
     engine.roll_initial(game, 0)
     engine.roll_initial(game, 1)
     engine.roll_dice(game)
-    assert game.initial_rolls_remaining == 2  # started at 3, consumed 1
+    assert game.initial_rolls_remaining == 2     # started at 3, consumed 1
+    assert game.phase is GamePhase.ROLLING
+    assert game.pending_dice == []
+    assert game.current_turn_index == 0          # still Alice
 
 
 def test_three_non_pair_rolls_pass_turn(scripted_rng):
+    # Three roll_dice calls in a row — no manual phase/pending_dice resets.
     game = engine.new_game(
         [("Alice", Color.RED), ("Bob", Color.BLUE)],
         rng=scripted_rng([6, 5, 3, 4,  # initial rolls
@@ -126,25 +136,25 @@ def test_three_non_pair_rolls_pass_turn(scripted_rng):
     engine.roll_initial(game, 0)
     engine.roll_initial(game, 1)
 
-    # Alice's 1st non-pair
+    # Alice's 1st non-pair — stays ROLLING, counter 3→2
     engine.roll_dice(game)
-    game.pending_dice = []                    # pretend she had no move → skipped
-    game.phase = GamePhase.ROLLING             # manual transition for this unit test
-    assert game.current_turn_index == 0       # still Alice
+    assert game.current_turn_index == 0
+    assert game.phase is GamePhase.ROLLING
+    assert game.initial_rolls_remaining == 2
 
-    # 2nd non-pair
+    # 2nd non-pair — stays ROLLING, counter 2→1
     engine.roll_dice(game)
-    game.pending_dice = []
-    game.phase = GamePhase.ROLLING
+    assert game.current_turn_index == 0
+    assert game.initial_rolls_remaining == 1
 
-    # 3rd non-pair → turn passes
+    # 3rd non-pair → turn passes to Bob
     engine.roll_dice(game)
-    assert game.current_turn_index == 1       # now Bob
+    assert game.current_turn_index == 1
     assert game.phase is GamePhase.ROLLING
     assert game.initial_rolls_remaining == 0
-    # Bob rolls
+
+    # Bob rolls — also all in jail, starts his own 3 opportunities (3→2)
     engine.roll_dice(game)
-    # Bob also has all pieces in jail → starts his own 3 opportunities
     assert game.initial_rolls_remaining == 2
 
 

@@ -37,7 +37,7 @@ def test_move_onto_rival_on_normal_cell_is_capture(scripted_rng):
 def test_move_onto_rival_on_safe_cell_is_plain_advance(scripted_rng):
     game = _game_setup(scripted_rng)
     # Find a safe cell reachable by dice=5 from some position.
-    safe_target = 6  # from the SAFES set
+    safe_target = 7  # from the SAFES set (RED's own SEGURO)
     alice = game.players[0].pieces[0]
     alice.state = PieceState.ON_BOARD
     alice.circuit_position = safe_target - 5

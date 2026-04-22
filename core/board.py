@@ -1,27 +1,35 @@
 """Board layout constants and pure helpers."""
 from core.entities import Color
 
-BOARD_SIZE = 96
+BOARD_SIZE = 68
 HOME_STRETCH_SIZE = 8
 
+# Each color's section spans 17 circuit cells. Colors are ordered
+# counter-clockwise visually from RED: RED (bottom-right) → GREEN
+# (top-right) → BLUE (top-left) → YELLOW (bottom-left). Must stay in
+# sync with the coordinate tables in client/src/composables/
+# useBoardGeometry.ts.
 EXITS: dict[Color, int] = {
     Color.RED: 0,
-    Color.BLUE: 24,
-    Color.GREEN: 48,
-    Color.YELLOW: 72,
+    Color.GREEN: 17,
+    Color.BLUE: 34,
+    Color.YELLOW: 51,
 }
 
-# Last circuit cell before diverging into the home stretch for each color.
-# Chosen so each color runs a full loop (95 cells) before entering.
+# Each color walks 63 cells before entering its own home stretch. The
+# entry sits inside the previous color's section, at the mid-arm
+# LLEGADA column drawn in client/src/assets/board.svg.
 HOME_STRETCH_ENTRY: dict[Color, int] = {
-    Color.RED: 71,
-    Color.BLUE: 95,
-    Color.GREEN: 23,
-    Color.YELLOW: 47,
+    Color.RED: 63,
+    Color.GREEN: 12,
+    Color.BLUE: 29,
+    Color.YELLOW: 46,
 }
 
+# Safe cells: each SALIDA, each own-color SEGURO (7 past SALIDA), and
+# each home-stretch entry (5 before the following SALIDA).
 SAFES: frozenset[int] = frozenset({
-    0, 6, 18, 24, 30, 42, 48, 54, 66, 72, 78, 90,
+    0, 7, 12, 17, 24, 29, 34, 41, 46, 51, 58, 63,
 })
 
 

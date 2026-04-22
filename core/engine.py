@@ -84,21 +84,25 @@ def roll_dice(game: Game) -> tuple[int, int]:
 
     # Handle "all pieces in jail" 3-opportunities mode.
     if _all_in_jail(player):
-        if game.initial_rolls_remaining == 0 and not is_pair:
-            # Entering the mode with a non-pair roll: set to 3 then decrement.
-            game.initial_rolls_remaining = 3
-        if not is_pair:
+        if is_pair:
+            # Pair: exit counter mode and fall through to normal MOVING flow.
+            game.initial_rolls_remaining = 0
+        else:
+            # Non-pair: consume one of the 3 attempts; stay in ROLLING so the
+            # player can roll again without passing through MOVING+skip_turn
+            # (which would reset the counter via _advance_turn).
+            if game.initial_rolls_remaining == 0:
+                game.initial_rolls_remaining = 3
             game.initial_rolls_remaining -= 1
+            game.consecutive_pairs = 0
             if game.initial_rolls_remaining <= 0:
-                # Exhausted: pass turn, keep dice discarded.
-                game.initial_rolls_remaining = 0
+                # Exhausted: pass turn.
                 game.pending_dice = []
-                game.consecutive_pairs = 0
                 _advance_turn(game)
                 return d1, d2
-        else:
-            # Pair clears the counter — play normally.
-            game.initial_rolls_remaining = 0
+            # Still have attempts: stay in ROLLING, no pending dice.
+            game.pending_dice = []
+            return d1, d2
 
     if is_pair:
         game.consecutive_pairs += 1
@@ -157,10 +161,13 @@ def available_moves(game: Game) -> list[Move]:
         and game.pending_dice[0] == game.pending_dice[1]
     )
 
-    for piece in player.pieces:
-        if piece.state is PieceState.IN_JAIL and is_pair_roll:
+    # One EXIT_JAIL move covers every jailed piece — applying it releases
+    # them all at once, so emitting per-piece moves would be redundant.
+    if is_pair_roll:
+        jailed = [p for p in player.pieces if p.state is PieceState.IN_JAIL]
+        if jailed:
             moves.append(Move(
-                piece_index=piece.index,
+                piece_index=jailed[0].index,
                 dice_value=game.pending_dice[0] + game.pending_dice[1],
                 action=MoveAction.EXIT_JAIL,
             ))
@@ -229,8 +236,12 @@ def apply_move(game: Game, move: Move) -> MoveResult:
         piece.circuit_position = next_position(piece.circuit_position, move.dice_value)
         result = MoveResult(action=MoveAction.ADVANCE)
     elif move.action is MoveAction.EXIT_JAIL:
-        piece.state = PieceState.ON_BOARD
-        piece.circuit_position = EXITS[player.color]
+        # EXIT_JAIL frees every jailed piece at once (the selected piece_index
+        # is only a pointer used for move identification).
+        for p in player.pieces:
+            if p.state is PieceState.IN_JAIL:
+                p.state = PieceState.ON_BOARD
+                p.circuit_position = EXITS[player.color]
         # EXIT_JAIL consumes BOTH dice of the pair.
         game.pending_dice = []
         _finish_move_turn_transition(game)

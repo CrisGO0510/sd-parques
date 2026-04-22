@@ -1,11 +1,16 @@
 <template>
   <q-page class="q-pa-sm">
-    <TurnBanner :is-my-turn="game.isMyTurn" :current-player-name="currentPlayerName" />
+    <TurnBanner
+      :is-my-turn="game.isMyTurn"
+      :current-player-name="currentPlayerName"
+      :phase="game.phase"
+      :already-rolled-initial="alreadyRolledInitial"
+    />
 
     <div class="row q-mt-md">
       <!-- Tablero -->
       <div class="col-12 col-md-8">
-        <BoardCanvas>
+        <BoardCanvas :debug="debugBoard">
           <template #pieces>
             <PieceToken
               v-for="(piece, idx) in allPieces" :key="idx"
@@ -15,6 +20,7 @@
             />
           </template>
         </BoardCanvas>
+        <q-toggle v-model="debugBoard" label="Mostrar coordenadas (debug)" />
       </div>
 
       <!-- Panel lateral -->
@@ -32,7 +38,30 @@
           @roll="onRoll"
         />
         <q-btn v-if="canSkip" class="q-mt-md full-width" label="Pasar turno" @click="onSkip" />
+
+        <!-- Hint: when it's the player's turn in MOVING phase with legal
+             moves available, the only way to progress is to click one of
+             the highlighted pieces on the board. Make that obvious. -->
+        <div v-if="showPieceHint" class="q-mt-md text-center">
+          <div class="text-subtitle2">Elige una ficha para mover</div>
+          <div class="text-caption text-grey">
+            Las fichas disponibles brillan en dorado
+          </div>
+        </div>
+
         <q-btn disable class="q-mt-md full-width" label="Recomendación (pronto)" />
+
+        <!-- Debug: quick inspection of the client's view of the game state.
+             Leave this in for now; we can remove it once the flow feels
+             solid and the team stops having to ask "what's going on?". -->
+        <q-separator spaced />
+        <div class="text-caption text-grey">
+          <div>phase: {{ game.phase ?? '—' }}</div>
+          <div>mi color: {{ game.myColor ?? '—' }}</div>
+          <div>es mi turno: {{ game.isMyTurn }}</div>
+          <div>moves disponibles: {{ game.availableMoves.length }}</div>
+          <div>dados: {{ game.state?.pending_dice.join(', ') ?? '—' }}</div>
+        </div>
       </div>
     </div>
 
@@ -74,7 +103,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useQuasar } from 'quasar';
 
 import BoardCanvas from 'components/BoardCanvas.vue';
 import PieceToken from 'components/PieceToken.vue';
@@ -89,20 +117,21 @@ import { GamePhase, PieceState } from 'src/types/domain';
 import type { Color, PieceDto, MoveDto } from 'src/types/domain';
 import { Route } from 'src/router/routes';
 
-const $q     = useQuasar();
 const router = useRouter();
 const game   = useGameStore();
 
+const debugBoard = ref<boolean>(false);
+
 interface PieceOwned { dto: PieceDto; color: Color; playerIndex: number }
 
+// STATE_UPDATE / AVAILABLE_MOVES / ERROR and GAME_OVER's setWinner are
+// handled in MainLayout (useAppEventSync). We only own GAME_OVER here for
+// the navigation push — by the time this fires, game.winnerUsername is
+// already set by the layout-level handler.
 const { send } = useServerProtocol({
-  [ServerEventType.STATE_UPDATE]:    (e) => game.updateFromStateUpdate(e.state),
-  [ServerEventType.AVAILABLE_MOVES]: (e) => game.setAvailableMoves(e.moves),
-  [ServerEventType.GAME_OVER]:       (e) => {
-    game.setWinner(e.winner_username);
+  [ServerEventType.GAME_OVER]: () => {
     void router.push(Route.END);
   },
-  [ServerEventType.ERROR]: (e) => $q.notify({ color: 'negative', message: e.message }),
 });
 
 const allPieces = computed<PieceOwned[]>(() => {
@@ -134,12 +163,37 @@ function isSelectable(p: PieceOwned): boolean {
   return game.availableMoves.some(m => m.piece_index === p.dto.index);
 }
 
-const canRoll = computed<boolean>(() =>
-  game.isMyTurn && (game.phase === GamePhase.ROLLING || game.phase === GamePhase.SETUP)
-);
+// During SETUP each player rolls their own initial die independently of
+// turn_order (which is still empty and only gets resolved after everyone
+// has rolled). During ROLLING, only the current turn's player can roll.
+const myPlayerIndex = computed<number>(() => {
+  if (!game.state || game.myColor === null) return -1;
+  return game.state.players.findIndex(p => p.color === game.myColor);
+});
+
+const alreadyRolledInitial = computed<boolean>(() => {
+  if (!game.state) return false;
+  const idx = myPlayerIndex.value;
+  if (idx < 0) return false;
+  // initial_rolls is Record<string, number> because JSON object keys are
+  // always strings, even though Python stores dict[int, int].
+  return String(idx) in game.state.initial_rolls;
+});
+
+const canRoll = computed<boolean>(() => {
+  if (!game.state) return false;
+  if (game.phase === GamePhase.SETUP) {
+    return myPlayerIndex.value >= 0 && !alreadyRolledInitial.value;
+  }
+  return game.isMyTurn && game.phase === GamePhase.ROLLING;
+});
 
 const canSkip = computed<boolean>(() =>
   game.isMyTurn && game.phase === GamePhase.MOVING && game.availableMoves.length === 0
+);
+
+const showPieceHint = computed<boolean>(() =>
+  game.isMyTurn && game.phase === GamePhase.MOVING && game.availableMoves.length > 0
 );
 
 function onRoll(): void {

@@ -7,8 +7,8 @@ from core.board import (
 from core.entities import Color
 
 
-def test_board_size_is_96():
-    assert BOARD_SIZE == 96
+def test_board_size_is_68():
+    assert BOARD_SIZE == 68
 
 
 def test_home_stretch_size_is_8():
@@ -52,7 +52,7 @@ def test_next_position_advances_within_range():
 
 
 def test_next_position_wraps_around():
-    assert next_position(94, 5) == 3
+    assert next_position(66, 5) == 3
 
 
 def test_next_position_lands_exactly_on_zero_after_full_loop():

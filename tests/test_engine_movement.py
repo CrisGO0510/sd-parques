@@ -50,19 +50,21 @@ def test_available_moves_is_deterministic(scripted_rng):
     assert keys == sorted(keys)
 
 
-def test_available_moves_includes_exit_jail_on_pair(scripted_rng):
+def test_available_moves_includes_single_exit_jail_on_pair(scripted_rng):
+    # With a pair rolled and any jailed piece, available_moves should emit
+    # exactly ONE EXIT_JAIL move — applying it frees all jailed pieces at
+    # once, so multiple per-piece moves would be redundant.
     game = engine.new_game(
         [("Alice", Color.RED), ("Bob", Color.BLUE)],
         rng=scripted_rng([6, 5, 3, 4]),
     )
     engine.roll_initial(game, 0)
     engine.roll_initial(game, 1)
-    # Alice all in jail. Manually set pending dice to a pair.
     force_dice(game, 4, 4)
-    game.consecutive_pairs = 1  # simulate we just rolled the pair
+    game.consecutive_pairs = 1
     moves = engine.available_moves(game)
-    actions = {m.action for m in moves}
-    assert MoveAction.EXIT_JAIL in actions
+    exit_moves = [m for m in moves if m.action is MoveAction.EXIT_JAIL]
+    assert len(exit_moves) == 1
 
 
 def test_available_moves_no_exit_jail_without_pair(scripted_rng):
@@ -114,7 +116,8 @@ def test_apply_move_rejects_unknown_move(scripted_rng):
         engine.apply_move(game, Move(0, 6, MoveAction.ADVANCE))  # no die 6
 
 
-def test_apply_move_exit_jail_places_piece_on_exit_and_consumes_pair(scripted_rng):
+def test_apply_move_exit_jail_releases_all_jailed_pieces(scripted_rng):
+    # All 4 pieces in jail + pair → EXIT_JAIL frees all of them at once.
     game = engine.new_game(
         [("Alice", Color.RED), ("Bob", Color.BLUE)],
         rng=scripted_rng([6, 5, 3, 4]),
@@ -127,8 +130,35 @@ def test_apply_move_exit_jail_places_piece_on_exit_and_consumes_pair(scripted_rn
     total = 4 + 4
     move = Move(piece_index=0, dice_value=total, action=MoveAction.EXIT_JAIL)
     engine.apply_move(game, move)
-    piece = game.players[0].pieces[0]
-    assert piece.state is PieceState.ON_BOARD
-    assert piece.circuit_position == EXITS[Color.RED]
+    for piece in game.players[0].pieces:
+        assert piece.state is PieceState.ON_BOARD
+        assert piece.circuit_position == EXITS[Color.RED]
     assert game.pending_dice == []   # both dice consumed by the pair
     assert game.phase is GamePhase.ROLLING  # re-roll (pair)
+
+
+def test_apply_move_exit_jail_releases_only_jailed_pieces(scripted_rng):
+    # Some pieces already on board — EXIT_JAIL frees the rest but leaves
+    # on-board pieces untouched.
+    game = engine.new_game(
+        [("Alice", Color.RED), ("Bob", Color.BLUE)],
+        rng=scripted_rng([6, 5, 3, 4]),
+    )
+    engine.roll_initial(game, 0)
+    engine.roll_initial(game, 1)
+    # Place Alice's piece 0 on the board at position 20 (not an exit).
+    alice = game.players[0]
+    alice.pieces[0].state = PieceState.ON_BOARD
+    alice.pieces[0].circuit_position = 20
+    force_dice(game, 3, 3)
+    game.consecutive_pairs = 1
+
+    move = Move(piece_index=1, dice_value=6, action=MoveAction.EXIT_JAIL)
+    engine.apply_move(game, move)
+    # Piece 0 stays where it was.
+    assert alice.pieces[0].state is PieceState.ON_BOARD
+    assert alice.pieces[0].circuit_position == 20
+    # Pieces 1, 2, 3 now on board at Red's exit.
+    for piece in alice.pieces[1:]:
+        assert piece.state is PieceState.ON_BOARD
+        assert piece.circuit_position == EXITS[Color.RED]

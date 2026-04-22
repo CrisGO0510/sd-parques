@@ -23,7 +23,6 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useConnectionStore } from 'src/stores/connection';
-import { useLobbyStore } from 'src/stores/lobby';
 import { useServerProtocol } from 'src/composables/useServerProtocol';
 import { ClientCommandType, ServerEventType } from 'src/types/protocol';
 import { Route } from 'src/router/routes';
@@ -35,7 +34,6 @@ const STORAGE_USERNAME = 'parques.username';
 const $q       = useQuasar();
 const router   = useRouter();
 const conn     = useConnectionStore();
-const lobby    = useLobbyStore();
 
 const host     = ref<string>(localStorage.getItem(STORAGE_HOST) ?? 'localhost');
 const storedPort = Number(localStorage.getItem(STORAGE_PORT));
@@ -43,14 +41,11 @@ const port     = ref<number>(Number.isFinite(storedPort) && storedPort > 0 ? sto
 const username = ref<string>(localStorage.getItem(STORAGE_USERNAME) ?? '');
 const connecting = ref<boolean>(false);
 
+// MainLayout's useAppEventSync stores lobby.isHost from WELCOME; we only
+// need this handler to navigate after that state is in place.
 const { send } = useServerProtocol({
-  [ServerEventType.WELCOME]: (e) => {
-    lobby.isHost = e.is_host;
+  [ServerEventType.WELCOME]: () => {
     void router.push(Route.LOBBY);
-  },
-  [ServerEventType.ERROR]: (e) => {
-    $q.notify({ color: 'negative', message: e.message, icon: 'error' });
-    connecting.value = false;
   },
 });
 
