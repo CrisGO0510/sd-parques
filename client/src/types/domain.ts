@@ -54,6 +54,7 @@ export interface GameStateDto {
   initial_rolls_remaining: number;
   consecutive_pairs: number;
   winner: number | null;
+  disconnected_colors: Color[];
 }
 
 export interface MoveDto {

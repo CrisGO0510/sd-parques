@@ -32,6 +32,7 @@
           v-if="game.state"
           :players="game.state.players"
           :current-turn-index="currentTurnIndex"
+          :disconnected-colors="game.state.disconnected_colors"
         />
         <q-separator spaced />
         <DiceRoller
@@ -222,7 +223,14 @@ const currentTurnIndex = computed<number>(() => {
 
 const currentPlayerName = computed<string | null>(() => {
   const idx = currentTurnIndex.value;
-  return idx >= 0 ? game.state?.players[idx]?.name ?? null : null;
+  if (idx < 0) return null;
+  const player = game.state?.players[idx];
+  if (!player) return null;
+  // Defensive: if for any reason the server hasn't advanced past a
+  // disconnected player yet, don't show "Turno de <ghost>" — the UI
+  // falls back to "Esperando…" via the banner.
+  if (game.state?.disconnected_colors.includes(player.color)) return null;
+  return player.name;
 });
 
 function isSelectable(p: PieceOwned): boolean {

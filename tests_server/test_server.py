@@ -19,6 +19,9 @@ class FakeConn:
         import json
         self.sent.append(json.loads(data.decode("utf-8").rstrip("\n")))
 
+    def close(self) -> None:
+        pass
+
 
 def _seed_rng() -> ScriptedRandom:
     return ScriptedRandom([6, 5, 3, 4])  # Alice=11, Bob=7
@@ -192,6 +195,147 @@ def test_message_in_closed_phase_rejected():
     srv.handle_message(a, {"type": "roll_dice"})
     errors = [m for m in a.sent if m["type"] == "error"]
     assert any(m["code"] == "GAME_ENDED" for m in errors)
+
+
+def test_disconnect_during_setup_auto_rolls_initial_so_setup_unblocks():
+    """Repro: 3 players in SETUP, players 1 and 2 have rolled, player 3
+    disconnects before rolling. Without an auto-roll the remaining
+    clients would stare at "Esperando a los demás jugadores…" forever."""
+    rng = ScriptedRandom([6, 5, 3, 4, 2, 1])
+    srv = Server(rng=rng)
+    alice, bob, carol = FakeConn("c1"), FakeConn("c2"), FakeConn("c3")
+    for c in (alice, bob, carol):
+        srv.register_connection(c)
+        srv.handle_message(c, {"type": "join", "username": c.conn_id})
+    srv.handle_message(alice, {"type": "select_color", "color": "red"})
+    srv.handle_message(bob,   {"type": "select_color", "color": "green"})
+    srv.handle_message(carol, {"type": "select_color", "color": "blue"})
+    srv.handle_message(alice, {"type": "start_game"})
+    # Only alice and bob roll their initial; carol leaves first.
+    srv.handle_message(alice, {"type": "roll_initial"})
+    srv.handle_message(bob,   {"type": "roll_initial"})
+    assert srv.session.game.phase.value == "setup"
+
+    alice.sent.clear(); bob.sent.clear()
+    srv._on_disconnect(carol)
+
+    # SETUP must be resolved — turn_order populated, phase now ROLLING,
+    # and the current turn is on a *connected* player.
+    assert srv.session.game.phase.value == "rolling"
+    assert len(srv.session.game.turn_order) == 3
+    assert srv.session.current_turn_conn_id() in {"c1", "c2"}
+    # Survivors learned about the auto-roll and the new state.
+    for surv in (alice, bob):
+        assert any(m["type"] == "initial_roll" and m["player_index"] == 2 for m in surv.sent)
+        assert any(m["type"] == "state_update" for m in surv.sent)
+
+
+def test_disconnect_of_current_player_advances_turn_and_broadcasts():
+    """3-player game: the current-turn player disconnects. Server must
+    advance to the next connected player and broadcast the updated
+    state (so the UI stops showing "Turno de <disconnected>")."""
+    rng = ScriptedRandom([
+        6, 5, 3, 4, 2, 1,  # initial rolls for 3 players
+        # Alice=11 (carol? let's see), Bob=7, Carol=3 → Alice first, then Bob, then Carol
+    ])
+    srv = Server(rng=rng)
+    alice, bob, carol = FakeConn("c1"), FakeConn("c2"), FakeConn("c3")
+    for c in (alice, bob, carol):
+        srv.register_connection(c)
+        srv.handle_message(c, {"type": "join", "username": c.conn_id})
+    srv.handle_message(alice, {"type": "select_color", "color": "red"})
+    srv.handle_message(bob,   {"type": "select_color", "color": "green"})
+    srv.handle_message(carol, {"type": "select_color", "color": "blue"})
+    srv.handle_message(alice, {"type": "start_game"})
+    srv.handle_message(alice, {"type": "roll_initial"})
+    srv.handle_message(bob,   {"type": "roll_initial"})
+    srv.handle_message(carol, {"type": "roll_initial"})
+
+    # Identify who holds the current turn and disconnect them.
+    current_conn_id = srv.session.current_turn_conn_id()
+    current_conn = next(c for c in (alice, bob, carol) if c.conn_id == current_conn_id)
+    others = [c for c in (alice, bob, carol) if c is not current_conn]
+    for o in others:
+        o.sent.clear()
+
+    srv._on_disconnect(current_conn)
+
+    # Turn must now belong to one of the remaining connected players.
+    new_conn_id = srv.session.current_turn_conn_id()
+    assert new_conn_id in {o.conn_id for o in others}
+    # And both survivors should have received a state_update reflecting it.
+    for o in others:
+        updates = [m for m in o.sent if m["type"] == "state_update"]
+        assert updates, f"{o.conn_id} got no state_update after peer disconnected"
+        last = updates[-1]
+        # current_turn_index points to the new (connected) player.
+        turn_order = last["state"]["turn_order"]
+        current_idx = last["state"]["current_turn_index"]
+        player_idx_holding_turn = turn_order[current_idx]
+        player_color = last["state"]["players"][player_idx_holding_turn]["color"]
+        assert player_color != srv.session.color_for_conn(current_conn.conn_id).value
+
+
+def test_disconnect_mid_game_skips_disconnected_turn():
+    """4-player scenario: 2 players disconnect mid-game. The server
+    should keep the turn on a *connected* player, not hang waiting for
+    the disconnected ones."""
+    rng = ScriptedRandom(
+        [6, 5, 3, 4, 5, 3, 2, 4,     # initial rolls for 4 players
+         1, 2,                        # later roll_dice calls don't matter here
+        ]
+    )
+    srv = Server(rng=rng)
+    conns = [FakeConn(f"c{i}") for i in range(1, 5)]
+    colors = ["red", "green", "blue", "yellow"]
+    names = ["Alice", "Bob", "Carol", "Dave"]
+    for c in conns:
+        srv.register_connection(c)
+    for c, name in zip(conns, names):
+        srv.handle_message(c, {"type": "join", "username": name})
+    for c, color in zip(conns, colors):
+        srv.handle_message(c, {"type": "select_color", "color": color})
+    srv.handle_message(conns[0], {"type": "start_game"})
+    for c in conns:
+        srv.handle_message(c, {"type": "roll_initial"})
+    # All 4 are connected. Find who holds the turn, then disconnect them
+    # plus one of their direct neighbours — the remaining 2 should keep
+    # rotating without the turn ever freezing on an absent color.
+    current_id = srv.session.current_turn_conn_id()
+    to_drop = [c for c in conns if c.conn_id == current_id][:1]
+    others = [c for c in conns if c is not to_drop[0]]
+    to_drop.append(others[0])
+
+    for c in to_drop:
+        srv._on_disconnect(c)
+
+    # Server should still be IN_GAME (2 players remain) and the current
+    # turn must belong to one of the still-connected players.
+    assert srv.phase is ServerPhase.IN_GAME
+    new_current_id = srv.session.current_turn_conn_id()
+    alive_ids = {c.conn_id for c in conns if c not in to_drop}
+    assert new_current_id in alive_ids
+
+
+def test_all_players_disconnect_resets_server_to_lobby():
+    """When every client from an in-progress game disconnects, the
+    server returns to LOBBY so the next client can start a fresh round
+    without restarting the process."""
+    srv, a, b = _start_two_player_game()
+    # First disconnect ends the game (connected_count drops below 2).
+    srv._on_disconnect(a)
+    assert srv.phase is ServerPhase.CLOSED
+    # Second disconnect empties the server → auto-reset to LOBBY.
+    srv._on_disconnect(b)
+    assert srv.phase is ServerPhase.LOBBY
+    assert srv.session is None
+    assert srv._connections == {}
+
+    # A brand-new client can now join and start a game.
+    charlie = FakeConn("c3")
+    srv.register_connection(charlie)
+    srv.handle_message(charlie, {"type": "join", "username": "Charlie"})
+    assert any(m["type"] == "welcome" and m["is_host"] for m in charlie.sent)
 
 
 def test_invalid_color_in_select_color():

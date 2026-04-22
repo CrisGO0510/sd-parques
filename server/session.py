@@ -112,7 +112,10 @@ class GameSession:
                 return False
             if current_color not in self.disconnected_colors:
                 return True
-            # Advance one turn; mimic engine._advance_turn behavior.
+            # Current player is disconnected: drop anything they had
+            # staged (pending dice, pair counter, jail-attempt counter)
+            # and advance to the next slot. Mimics engine._advance_turn.
+            self.game.pending_dice = []
             self.game.consecutive_pairs = 0
             self.game.initial_rolls_remaining = 0
             self.game.current_turn_index = (
@@ -124,7 +127,10 @@ class GameSession:
     # ---- serialization ----
 
     def state_dict(self) -> dict:
-        """Return the Game as a JSON-serializable dict (without _rng)."""
+        """Return the Game as a JSON-serializable dict (without _rng).
+        Also exposes `disconnected_colors` so the client can render
+        absent players correctly."""
         d = asdict(self.game)
         # asdict already strips non-field attributes like _rng.
+        d["disconnected_colors"] = sorted(c.value for c in self.disconnected_colors)
         return d

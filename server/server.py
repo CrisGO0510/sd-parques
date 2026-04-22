@@ -132,7 +132,53 @@ class Server:
                 self._handle_ingame_leave(conn)
             else:
                 self.unregister_connection(conn.conn_id)
+            # Once every client from the previous round is gone, drop
+            # back to LOBBY so new connections can start a fresh game
+            # without restarting the server.
+            if not self._connections and self.phase is not ServerPhase.LOBBY:
+                self._reset_to_lobby()
         conn.close()
+
+    def _auto_roll_initial_for_disconnected(self, conn_id: str) -> None:
+        """If the game is still in SETUP and the just-disconnected
+        player hasn't rolled their initial die yet, roll for them so
+        turn_order can resolve and the other players stop waiting."""
+        assert self.session is not None
+        if self.session.game.phase.value != "setup":
+            return
+        player_idx = self.session.player_index_for_conn(conn_id)
+        if player_idx is None:
+            return
+        if player_idx in self.session.game.initial_rolls:
+            return
+        try:
+            d1, d2 = self.session.roll_initial(player_idx)
+        except (DomainError, ValueError) as e:
+            logger.warning("auto roll_initial failed for %s: %s", conn_id, e)
+            return
+        player = self.session.game.players[player_idx]
+        logger.info(
+            "auto-rolled initial for disconnected %s (%s): %d + %d = %d",
+            conn_id, player.name, d1, d2, d1 + d2,
+        )
+        self._broadcast_session({
+            "type": "initial_roll",
+            "player_index": player_idx,
+            "username": player.name,
+            "d1": d1, "d2": d2,
+            "total": d1 + d2,
+        })
+
+    def _reset_to_lobby(self) -> None:
+        """Clear any in-progress or finished game and return to LOBBY.
+        Caller must hold `self.lock`."""
+        logger.info(
+            "no active connections left, resetting %s → LOBBY",
+            self.phase.value,
+        )
+        self.phase = ServerPhase.LOBBY
+        self.lobby = Lobby()
+        self.session = None
 
     def register_connection(self, conn) -> None:
         """Make the server aware of a new connection (before any message arrives)."""
@@ -396,12 +442,43 @@ class Server:
         assert self.session is not None
         color = self.session.color_for_conn(conn.conn_id)
         if color is not None:
+            logger.info(
+                "in-game leave: conn=%s color=%s phase=%s",
+                conn.conn_id, color.value, self.session.game.phase.value,
+            )
             self.session.mark_disconnected(conn.conn_id)
             self.unregister_connection(conn.conn_id)
+            # SETUP hangs if someone leaves without rolling their initial
+            # die — roll on their behalf so turn_order can resolve.
+            self._auto_roll_initial_for_disconnected(conn.conn_id)
+            # If the disconnect leaves enough players to keep playing,
+            # skip past any disconnected colors holding the turn so the
+            # game doesn't hang waiting for them to roll.
+            if self.session.connected_count() >= 2:
+                if self.session.advance_past_disconnected():
+                    logger.info(
+                        "advanced past disconnected: current turn now on %s",
+                        self.session.current_turn_conn_id(),
+                    )
             self._broadcast_session({
                 "type": "state_update",
                 "state": self.session.state_dict(),
             })
+            # If the new current player is in MOVING (rare — happens
+            # only if the turn didn't actually advance), rebroadcast
+            # available moves so they render. In the typical case
+            # advance_past_disconnected resets phase to ROLLING.
+            if self.session.game.phase.value == "moving":
+                moves = self.session.available_moves()
+                self._broadcast_session({
+                    "type": "available_moves",
+                    "moves": [
+                        {"piece_index": m.piece_index,
+                         "dice_value":  m.dice_value,
+                         "action":      m.action.value}
+                        for m in moves
+                    ],
+                })
             if self.session.connected_count() < 2:
                 # End the game.
                 last = self.session.game.winner  # may already be set

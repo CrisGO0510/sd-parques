@@ -39,6 +39,7 @@ export function makeGameState(overrides: Partial<GameStateDto> = {}): GameStateD
     initial_rolls_remaining: 0,
     consecutive_pairs: 0,
     winner: null,
+    disconnected_colors: [],
     ...overrides,
   };
 }
