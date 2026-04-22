@@ -1,5 +1,8 @@
 {
   "appId": "com.parques.game",
   "appName": "Parques Client",
-  "webDir": "www"
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http"
+  }
 }
