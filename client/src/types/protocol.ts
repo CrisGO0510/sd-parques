@@ -71,6 +71,8 @@ export type ServerEvent =
       type: ServerEventType.INITIAL_ROLL;
       player_index: number;
       username: string;
+      d1: number;
+      d2: number;
       total: number;
     }
   | {

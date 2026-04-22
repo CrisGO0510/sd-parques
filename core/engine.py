@@ -39,8 +39,8 @@ def new_game(
     return game
 
 
-def roll_initial(game: Game, player_index: int) -> int:
-    """SETUP phase: player rolls to help decide turn order."""
+def roll_initial(game: Game, player_index: int) -> tuple[int, int]:
+    """SETUP phase: player rolls two dice; their sum decides turn order."""
     if game.phase is not GamePhase.SETUP:
         raise WrongPhase("not in SETUP phase")
     if not 0 <= player_index < len(game.players):
@@ -49,13 +49,14 @@ def roll_initial(game: Game, player_index: int) -> int:
         raise ValueError(f"player {player_index} already rolled")
 
     rng = game._rng  # type: ignore[attr-defined]
-    total = rng.randint(1, 6) + rng.randint(1, 6)
-    game.initial_rolls[player_index] = total
+    d1 = rng.randint(1, 6)
+    d2 = rng.randint(1, 6)
+    game.initial_rolls[player_index] = d1 + d2
 
     if len(game.initial_rolls) == len(game.players):
         _resolve_turn_order(game)
 
-    return total
+    return d1, d2
 
 
 def _resolve_turn_order(game: Game) -> None:
@@ -181,10 +182,18 @@ def available_moves(game: Game) -> list[Move]:
             if p.state is PieceState.ON_BOARD and p.circuit_position is not None:
                 enemy_positions[p.circuit_position] = other
 
+    # Dice options include each individual value AND their sum (when two
+    # distinct dice are pending). A sum move consumes both dice and jumps
+    # over the intermediate cell — it cannot capture at the intermediate
+    # position.
+    die_options = set(game.pending_dice)
+    if len(game.pending_dice) == 2:
+        die_options.add(game.pending_dice[0] + game.pending_dice[1])
+
     for piece in player.pieces:
         if piece.state is PieceState.ON_BOARD:
             entry = HOME_STRETCH_ENTRY[player.color]
-            for die in set(game.pending_dice):
+            for die in die_options:
                 # 1) Does this move cross the home-stretch entry?
                 if _crossed_home_entry(piece.circuit_position, die, entry):
                     overflow = _home_stretch_overflow(
@@ -208,7 +217,7 @@ def available_moves(game: Game) -> list[Move]:
                 ))
 
         elif piece.state is PieceState.IN_HOME_STRETCH:
-            for die in set(game.pending_dice):
+            for die in die_options:
                 new_pos = piece.home_stretch_position + die
                 if new_pos == HOME_STRETCH_SIZE - 1:
                     moves.append(Move(piece.index, die, MoveAction.REACH_GOAL))
@@ -288,7 +297,17 @@ def apply_move(game: Game, move: Move) -> MoveResult:
 
 
 def _consume_die(game: Game, die: int) -> None:
-    game.pending_dice.remove(die)
+    """Remove `die` from pending_dice. `die` is either an individual die
+    value (in pending_dice) or the sum of both pending dice — in which
+    case both are consumed together."""
+    if die in game.pending_dice:
+        game.pending_dice.remove(die)
+    elif len(game.pending_dice) == 2 and die == sum(game.pending_dice):
+        game.pending_dice.clear()
+    else:
+        raise ValueError(
+            f"cannot consume die {die} from pending {game.pending_dice}"
+        )
 
 
 def crown_piece(game: Game, piece_index: int) -> None:
@@ -346,18 +365,21 @@ def _home_stretch_overflow(start: int, steps: int, entry: int) -> int:
     return steps - distance - 1
 
 
-def _capture_at(game: Game, position: int, attacker: Player) -> Piece | None:
+def _capture_at(game: Game, position: int, attacker: Player) -> list[Piece]:
+    """Send every enemy piece at `position` back to jail and return
+    snapshots of them. Own-color pieces can stack on non-safe cells so a
+    single capture may evict two or more pieces."""
+    captured: list[Piece] = []
     for other in game.players:
         if other is attacker:
             continue
         for p in other.pieces:
             if p.state is PieceState.ON_BOARD and p.circuit_position == position:
-                captured_snapshot = Piece(
+                captured.append(Piece(
                     index=p.index,
                     state=PieceState.ON_BOARD,
                     circuit_position=position,
-                )
+                ))
                 p.state = PieceState.IN_JAIL
                 p.circuit_position = None
-                return captured_snapshot
-    return None
+    return captured

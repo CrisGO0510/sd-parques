@@ -60,7 +60,10 @@ class Move:
 @dataclass
 class MoveResult:
     action: MoveAction
-    captured: Piece | None = None
+    # Every enemy piece that sat on the target cell at capture time (not
+    # just one) — own-color pieces legitimately stack on non-safe cells
+    # so a capture can evict several at once.
+    captured: list[Piece] = field(default_factory=list)
     reached_goal: bool = False
     triggered_crowning: bool = False
 

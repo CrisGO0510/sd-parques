@@ -65,7 +65,7 @@ export interface MoveDto {
 export interface MoveResultDto {
   action: MoveAction;
   reached_goal: boolean;
-  captured: PieceDto | null;
+  captured: PieceDto[];
 }
 
 export interface LobbyPlayerDto {

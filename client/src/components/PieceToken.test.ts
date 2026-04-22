@@ -27,7 +27,7 @@ describe('PieceToken', () => {
     expect(wrapper.find('circle').exists()).toBe(false);
   });
 
-  it('adds selectable class when selectable', () => {
+  it('adds selectable class to the circle when selectable', () => {
     const wrapper = mount(PieceToken, {
       props: {
         piece: makePiece({ state: PieceState.ON_BOARD, circuit_position: 10 }),
@@ -35,6 +35,31 @@ describe('PieceToken', () => {
         selectable: true,
       },
     });
-    expect(wrapper.classes()).toContain('selectable');
+    expect(wrapper.find('circle').classes()).toContain('selectable');
+  });
+
+  it('renders a count badge when count > 1', () => {
+    const wrapper = mount(PieceToken, {
+      props: {
+        piece: makePiece({ state: PieceState.ON_BOARD, circuit_position: 10 }),
+        color: Color.RED,
+        selectable: false,
+        count: 3,
+      },
+    });
+    expect(wrapper.find('text').exists()).toBe(true);
+    expect(wrapper.find('text').text()).toBe('3');
+  });
+
+  it('does not render a count badge when count is 1', () => {
+    const wrapper = mount(PieceToken, {
+      props: {
+        piece: makePiece({ state: PieceState.ON_BOARD, circuit_position: 10 }),
+        color: Color.RED,
+        selectable: false,
+        count: 1,
+      },
+    });
+    expect(wrapper.find('text').exists()).toBe(false);
   });
 });

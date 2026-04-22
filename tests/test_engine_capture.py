@@ -81,8 +81,30 @@ def test_apply_move_capture_sends_rival_to_jail(scripted_rng):
     force_dice(game, 3, 5)
     result = engine.apply_move(game, Move(0, 3, MoveAction.CAPTURE))
     assert result.action is MoveAction.CAPTURE
-    assert result.captured is not None
-    assert result.captured.index == 0
+    assert len(result.captured) == 1
+    assert result.captured[0].index == 0
     assert bob.state is PieceState.IN_JAIL
     assert bob.circuit_position is None
     assert alice.circuit_position == 13
+
+
+def test_apply_move_capture_evicts_all_stacked_enemies(scripted_rng):
+    # Two of Bob's pieces share a non-safe cell. Alice captures both at once.
+    game = _game_setup(scripted_rng)
+    alice = game.players[0].pieces[0]
+    alice.state = PieceState.ON_BOARD
+    alice.circuit_position = 10
+    for bob_piece_index in (0, 1):
+        bob = game.players[1].pieces[bob_piece_index]
+        bob.state = PieceState.ON_BOARD
+        bob.circuit_position = 13
+
+    force_dice(game, 3, 5)
+    result = engine.apply_move(game, Move(0, 3, MoveAction.CAPTURE))
+    assert result.action is MoveAction.CAPTURE
+    assert len(result.captured) == 2
+    assert {c.index for c in result.captured} == {0, 1}
+    for bob_piece_index in (0, 1):
+        piece = game.players[1].pieces[bob_piece_index]
+        assert piece.state is PieceState.IN_JAIL
+        assert piece.circuit_position is None

@@ -37,5 +37,5 @@ def test_move_and_moveresult_construct():
     move = Move(piece_index=0, dice_value=5, action=MoveAction.ADVANCE)
     assert move.action is MoveAction.ADVANCE
     result = MoveResult(action=MoveAction.CAPTURE)
-    assert result.captured is None
+    assert result.captured == []
     assert result.reached_goal is False

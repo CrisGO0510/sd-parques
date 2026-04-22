@@ -279,13 +279,14 @@ class Server:
                     return
 
         if t == "roll_initial":
-            total = self.session.roll_initial(player_idx)
+            d1, d2 = self.session.roll_initial(player_idx)
             player = self.session.game.players[player_idx]
             self._broadcast_session({
                 "type": "initial_roll",
                 "player_index": player_idx,
                 "username": player.name,
-                "total": total,
+                "d1": d1, "d2": d2,
+                "total": d1 + d2,
             })
             self._broadcast_session({
                 "type": "state_update",
@@ -333,13 +334,14 @@ class Server:
                 "result": {
                     "action":         result.action.value,
                     "reached_goal":   result.reached_goal,
-                    "captured":       (
+                    "captured":       [
                         {
-                            "index":         result.captured.index,
-                            "circuit_position": result.captured.circuit_position,
-                            "state":         result.captured.state.value,
-                        } if result.captured else None
-                    ),
+                            "index":            c.index,
+                            "circuit_position": c.circuit_position,
+                            "state":            c.state.value,
+                        }
+                        for c in result.captured
+                    ],
                 },
             })
             self._broadcast_session({

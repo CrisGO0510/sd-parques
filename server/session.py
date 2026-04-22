@@ -50,7 +50,7 @@ class GameSession:
 
     # ---- engine delegation ----
 
-    def roll_initial(self, player_index: int) -> int:
+    def roll_initial(self, player_index: int) -> tuple[int, int]:
         return engine.roll_initial(self.game, player_index)
 
     def roll_dice(self) -> tuple[int, int]:

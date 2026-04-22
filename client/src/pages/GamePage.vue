@@ -13,10 +13,13 @@
         <BoardCanvas :debug="debugBoard">
           <template #pieces>
             <PieceToken
-              v-for="(piece, idx) in allPieces" :key="idx"
-              :piece="piece.dto" :color="piece.color"
-              :selectable="isSelectable(piece)"
-              @click="onPieceClick(piece)"
+              v-for="group in pieceGroups" :key="group.key"
+              :piece="group.representative.dto" :color="group.representative.color"
+              :count="group.count"
+              :sub-index="group.cellSubIndex"
+              :sub-total="group.cellSubTotal"
+              :selectable="isSelectable(group.representative)"
+              @click="onPieceClick(group.representative)"
             />
           </template>
         </BoardCanvas>
@@ -32,8 +35,8 @@
         />
         <q-separator spaced />
         <DiceRoller
-          :d1="game.dice?.[0] ?? null"
-          :d2="game.dice?.[1] ?? null"
+          :d1="displayedDice[0]"
+          :d2="displayedDice[1]"
           :can-roll="canRoll"
           @roll="onRoll"
         />
@@ -85,14 +88,12 @@
     <!-- Dialog: Choose die when piece has multiple options -->
     <q-dialog :model-value="dieChoice !== null" persistent>
       <q-card v-if="dieChoice">
-        <q-card-section>
-          ¿Usar el {{ dieChoice.options[0] }} o el {{ dieChoice.options[1] }}?
-        </q-card-section>
+        <q-card-section>Elige qué dado usar</q-card-section>
         <q-card-actions align="center">
           <q-btn
-            v-for="die in dieChoice.options" :key="die"
-            color="primary" :label="String(die)"
-            @click="onDieChosen(die)"
+            v-for="opt in dieChoiceOptions" :key="opt.value"
+            color="primary" :label="opt.label"
+            @click="onDieChosen(opt.value)"
           />
         </q-card-actions>
       </q-card>
@@ -146,6 +147,73 @@ const allPieces = computed<PieceOwned[]>(() => {
   return out;
 });
 
+// Pieces of the same color sharing a visual position are grouped into a
+// single token with a count badge. When several *different colors* share
+// the same circuit cell (SALIDA, SEGURO) each color is assigned a
+// sub-index inside the cell so PieceToken can offset them into a grid
+// instead of stacking on top of each other.
+interface PieceGroup {
+  key: string;
+  representative: PieceOwned;
+  members: PieceOwned[];
+  count: number;
+  cellSubIndex: number;
+  cellSubTotal: number;
+}
+
+function positionKey(p: PieceOwned): string {
+  const dto = p.dto;
+  switch (dto.state) {
+    case PieceState.IN_JAIL:          return `jail-${p.color}-${dto.index}`;
+    case PieceState.ON_BOARD:         return `board-${p.color}-${dto.circuit_position}`;
+    case PieceState.IN_HOME_STRETCH:  return `hs-${p.color}-${dto.home_stretch_position}`;
+    case PieceState.CROWNED:          return `crowned-${p.color}-${dto.index}`;
+  }
+}
+
+// Cells that different colors can share. Only circuit cells count — each
+// color has its own jail slots and home-stretch column.
+function sharedCellKey(p: PieceOwned): string | null {
+  return p.dto.state === PieceState.ON_BOARD
+    ? `board-${p.dto.circuit_position}`
+    : null;
+}
+
+const pieceGroups = computed<PieceGroup[]>(() => {
+  const groups = new Map<string, PieceGroup>();
+  for (const piece of allPieces.value) {
+    const key = positionKey(piece);
+    const g = groups.get(key);
+    if (g) {
+      g.members.push(piece);
+      g.count++;
+    } else {
+      groups.set(key, {
+        key, representative: piece, members: [piece], count: 1,
+        cellSubIndex: 0, cellSubTotal: 1,
+      });
+    }
+  }
+  // Assign sub-indices for colors sharing the same circuit cell.
+  const byCell = new Map<string, PieceGroup[]>();
+  for (const g of groups.values()) {
+    const ck = sharedCellKey(g.representative);
+    if (ck === null) continue;
+    const list = byCell.get(ck) ?? [];
+    list.push(g);
+    byCell.set(ck, list);
+  }
+  for (const list of byCell.values()) {
+    if (list.length <= 1) continue;
+    list.sort((a, b) => a.representative.color.localeCompare(b.representative.color));
+    list.forEach((g, i) => {
+      g.cellSubIndex = i;
+      g.cellSubTotal = list.length;
+    });
+  }
+  return [...groups.values()];
+});
+
 const currentTurnIndex = computed<number>(() => {
   const st = game.state;
   if (!st || st.turn_order.length === 0) return -1;
@@ -178,6 +246,17 @@ const alreadyRolledInitial = computed<boolean>(() => {
   // initial_rolls is Record<string, number> because JSON object keys are
   // always strings, even though Python stores dict[int, int].
   return String(idx) in game.state.initial_rolls;
+});
+
+// Prefer pending_dice (still usable) but fall back to the last rolled
+// values so the player still sees what they rolled after the engine
+// clears pending_dice (e.g., non-pair roll with every piece in jail).
+const displayedDice = computed<[number | null, number | null]>(() => {
+  const pending = game.state?.pending_dice ?? [];
+  if (pending.length === 2) return [pending[0]!, pending[1]!];
+  const last = game.lastRoll;
+  if (last) return [last.d1, last.d2];
+  return [null, null];
 });
 
 const canRoll = computed<boolean>(() => {
@@ -218,11 +297,28 @@ function onCrownPiece(piece_index: number): void {
   send({ type: ClientCommandType.CROWN_PIECE, piece_index });
 }
 
-// Die-choice handling: if a piece has multiple moves with different dice, ask.
+// Die-choice handling: if a piece has multiple moves with different dice
+// values, ask. "options" contains individual die values AND possibly the
+// sum of both dice (a valid single move that consumes both).
 interface DieChoice { pieceIndex: number; options: number[] }
 const dieChoice = ref<DieChoice | null>(null);
 
+interface DieOption { value: number; label: string }
+const dieChoiceOptions = computed<DieOption[]>(() => {
+  if (!dieChoice.value) return [];
+  const pending = game.state?.pending_dice ?? [];
+  return dieChoice.value.options.map(value => {
+    const isIndividual = pending.includes(value);
+    return { value, label: isIndividual ? `Dado ${value}` : `Suma (${value})` };
+  });
+});
+
 function onPieceClick(p: PieceOwned): void {
+  // Guard: if it's not your turn, the piece isn't yours, or it has no
+  // legal moves, a click is a no-op. The token already renders as
+  // non-selectable in that case; this just prevents the dialog from
+  // popping up on spurious clicks.
+  if (!isSelectable(p)) return;
   const matches = game.availableMoves.filter(m => m.piece_index === p.dto.index);
   if (matches.length === 1) {
     applyMove(matches[0]!);

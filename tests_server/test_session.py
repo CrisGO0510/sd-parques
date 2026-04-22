@@ -33,8 +33,8 @@ def test_roll_initial_delegates_to_engine():
     session = _make_session(rng)
     alice_idx = session.player_index_for_conn("c1")
     bob_idx = session.player_index_for_conn("c2")
-    assert session.roll_initial(alice_idx) == 11
-    assert session.roll_initial(bob_idx) == 7
+    assert sum(session.roll_initial(alice_idx)) == 11
+    assert sum(session.roll_initial(bob_idx)) == 7
     assert session.game.phase is GamePhase.ROLLING
 
 

@@ -32,6 +32,22 @@ export function useAppEventSync(): void {
     [ServerEventType.STATE_UPDATE]: (e) => {
       game.updateFromStateUpdate(e.state);
     },
+    [ServerEventType.DICE_RESULT]: (e) => {
+      game.setLastRoll({ d1: e.d1, d2: e.d2, isPair: e.is_pair });
+      const msg = e.is_pair
+        ? `¡Par de ${e.d1}! (suma ${e.d1 + e.d2})`
+        : `Dados: ${e.d1} y ${e.d2} (suma ${e.d1 + e.d2})`;
+      $q.notify({ color: 'info', message: msg, icon: 'casino', timeout: 1800 });
+    },
+    [ServerEventType.INITIAL_ROLL]: (e) => {
+      game.setLastRoll({ d1: e.d1, d2: e.d2, isPair: e.d1 === e.d2 });
+      $q.notify({
+        color: 'info',
+        message: `${e.username} sacó ${e.total} (${e.d1} + ${e.d2})`,
+        icon: 'casino',
+        timeout: 1800,
+      });
+    },
     [ServerEventType.AVAILABLE_MOVES]: (e) => {
       game.setAvailableMoves(e.moves);
     },

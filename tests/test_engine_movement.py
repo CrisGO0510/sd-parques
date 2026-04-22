@@ -26,10 +26,12 @@ def test_available_moves_lists_advance_per_die(scripted_rng):
     game = _game_with_piece_on_board(scripted_rng, position=10)
     force_dice(game, 3, 4)
     moves = engine.available_moves(game)
-    # One piece on board + 2 dice → 2 ADVANCE moves (same piece, d=3 and d=4).
+    # One piece on board + 2 distinct dice → 3 ADVANCE moves: d=3, d=4,
+    # and d=7 (use both dice as a single sum move).
     assert sorted((m.piece_index, m.dice_value, m.action) for m in moves) == [
         (0, 3, MoveAction.ADVANCE),
         (0, 4, MoveAction.ADVANCE),
+        (0, 7, MoveAction.ADVANCE),
     ]
 
 

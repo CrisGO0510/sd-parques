@@ -44,9 +44,9 @@ def test_roll_initial_collects_rolls_and_transitions_to_rolling(scripted_rng):
         [("Alice", Color.RED), ("Bob", Color.BLUE)],
         rng=scripted_rng([3, 4, 6, 5]),  # Alice=7, Bob=11 → Bob first
     )
-    assert engine.roll_initial(game, 0) == 7
+    assert sum(engine.roll_initial(game, 0)) == 7
     assert game.phase is GamePhase.SETUP
-    assert engine.roll_initial(game, 1) == 11
+    assert sum(engine.roll_initial(game, 1)) == 11
     assert game.phase is GamePhase.ROLLING
     assert game.turn_order == [1, 0]  # Bob (index 1) first
     assert game.current_turn_index == 0

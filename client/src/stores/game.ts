@@ -2,11 +2,17 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { Color, GamePhase, GameStateDto, MoveDto } from 'src/types/domain';
 
+export interface LastRoll { d1: number; d2: number; isPair: boolean }
+
 export const useGameStore = defineStore('game', () => {
   const state = ref<GameStateDto | null>(null);
   const availableMoves = ref<MoveDto[]>([]);
   const myColor = ref<Color | null>(null);
   const winnerUsername = ref<string | null>(null);
+  // Most recent dice roll. Survives across state updates so the player
+  // can still see what they rolled even when `pending_dice` has been
+  // cleared (e.g., non-pair roll while all pieces are in jail).
+  const lastRoll = ref<LastRoll | null>(null);
 
   const currentTurnColor = computed<Color | null>(() => {
     const st = state.value;
@@ -39,11 +45,16 @@ export const useGameStore = defineStore('game', () => {
     winnerUsername.value = u;
   }
 
+  function setLastRoll(r: LastRoll): void {
+    lastRoll.value = r;
+  }
+
   function reset(): void {
     state.value = null;
     availableMoves.value = [];
     myColor.value = null;
     winnerUsername.value = null;
+    lastRoll.value = null;
   }
 
   return {
@@ -51,6 +62,7 @@ export const useGameStore = defineStore('game', () => {
     availableMoves,
     myColor,
     winnerUsername,
+    lastRoll,
     currentTurnColor,
     isMyTurn,
     phase,
@@ -58,6 +70,7 @@ export const useGameStore = defineStore('game', () => {
     updateFromStateUpdate,
     setAvailableMoves,
     setWinner,
+    setLastRoll,
     reset,
   };
 });
