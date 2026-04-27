@@ -394,14 +394,15 @@ class Server:
                 "type": "state_update",
                 "state": self.session.state_dict(),
             })
-            # If the game is over, transition to CLOSED.
+            # If the game is over, drop straight back to LOBBY so a new
+            # round can start even while losers are still parked on EndPage.
             if self.session.game.winner is not None:
                 self._broadcast_session({
                     "type": "game_over",
                     "winner_index":    self.session.game.winner,
                     "winner_username": self.session.game.players[self.session.game.winner].name,
                 })
-                self.phase = ServerPhase.CLOSED
+                self._reset_to_lobby()
             elif self.session.game.pending_dice and self.session.game.phase.value == "moving":
                 # Still moves pending; tell current player their options.
                 current_conn_id = self.session.current_turn_conn_id()
@@ -432,7 +433,7 @@ class Server:
                     "winner_index":    self.session.game.winner,
                     "winner_username": self.session.game.players[self.session.game.winner].name,
                 })
-                self.phase = ServerPhase.CLOSED
+                self._reset_to_lobby()
         elif t == "join":
             self._send_error(conn, "FORBIDDEN", "a game is in progress")
         else:
@@ -496,4 +497,4 @@ class Server:
                         self.session.game.players[last].name if last is not None else None
                     ),
                 })
-                self.phase = ServerPhase.CLOSED
+                self._reset_to_lobby()

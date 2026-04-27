@@ -322,10 +322,13 @@ def test_all_players_disconnect_resets_server_to_lobby():
     server returns to LOBBY so the next client can start a fresh round
     without restarting the process."""
     srv, a, b = _start_two_player_game()
-    # First disconnect ends the game (connected_count drops below 2).
+    # First disconnect ends the game (connected_count drops below 2) and
+    # resets immediately to LOBBY so a new client can start a fresh round
+    # even if the surviving peer is still parked on the EndPage.
     srv._on_disconnect(a)
-    assert srv.phase is ServerPhase.CLOSED
-    # Second disconnect empties the server → auto-reset to LOBBY.
+    assert srv.phase is ServerPhase.LOBBY
+    assert srv.session is None
+    # Second disconnect just empties out the residual conn — phase stays LOBBY.
     srv._on_disconnect(b)
     assert srv.phase is ServerPhase.LOBBY
     assert srv.session is None
@@ -336,6 +339,30 @@ def test_all_players_disconnect_resets_server_to_lobby():
     srv.register_connection(charlie)
     srv.handle_message(charlie, {"type": "join", "username": "Charlie"})
     assert any(m["type"] == "welcome" and m["is_host"] for m in charlie.sent)
+
+
+def test_game_over_does_not_block_new_clients_while_old_one_lingers():
+    """Repro: game ends, one peer still has its WS open (parked on EndPage).
+    A brand-new client must be able to join and start a new round without
+    waiting for the lingering peer to disconnect — otherwise the server
+    rejects the new join with GAME_ENDED and forces a process restart."""
+    srv, alice, bob = _start_two_player_game()
+    # Bob disconnects mid-game → triggers game_over. Alice is still
+    # connected (her WS is open while she's on EndPage).
+    srv._on_disconnect(bob)
+    assert "c1" in srv._connections, "alice should still be connected"
+
+    # Carol arrives in a fresh tab and tries to join.
+    carol = FakeConn("c3")
+    srv.register_connection(carol)
+    srv.handle_message(carol, {"type": "join", "username": "Carol"})
+
+    # Carol must be welcomed — not rejected with GAME_ENDED.
+    errors = [m for m in carol.sent if m["type"] == "error"]
+    assert not any(m["code"] == "GAME_ENDED" for m in errors), (
+        f"new client got GAME_ENDED while old peer was still connected: {errors}"
+    )
+    assert any(m["type"] == "welcome" for m in carol.sent)
 
 
 def test_invalid_color_in_select_color():
