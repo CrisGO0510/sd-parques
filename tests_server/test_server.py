@@ -317,6 +317,56 @@ def test_disconnect_mid_game_skips_disconnected_turn():
     assert new_current_id in alive_ids
 
 
+def test_turn_landing_on_disconnected_player_auto_skips():
+    """Repro: 3 players, carol disconnects WHILE IT'S NOT HER TURN. Alice
+    and bob each play a turn; the cursor advances naturally toward carol.
+    Without auto-skip the game freezes on carol's turn — a disconnected
+    client will never issue a command, and the surviving players see
+    'Esperando…' forever."""
+    # All-pieces-in-jail + non-pair dice consumes 1 of 3 "intentos"; 3
+    # non-pair rolls in a row exhaust them and pass the turn.
+    rng = ScriptedRandom([
+        6, 5, 3, 4, 2, 1,             # initial rolls: Alice=11, Bob=7, Carol=3
+        1, 2,  1, 3,  1, 4,           # alice: three non-pair rolls
+        1, 2,  1, 3,  1, 4,           # bob:   three non-pair rolls
+    ])
+    srv = Server(rng=rng)
+    alice = FakeConn("c1"); bob = FakeConn("c2"); carol = FakeConn("c3")
+    for c in (alice, bob, carol):
+        srv.register_connection(c)
+    srv.handle_message(alice, {"type": "join", "username": "Alice"})
+    srv.handle_message(bob,   {"type": "join", "username": "Bob"})
+    srv.handle_message(carol, {"type": "join", "username": "Carol"})
+    srv.handle_message(alice, {"type": "select_color", "color": "red"})
+    srv.handle_message(bob,   {"type": "select_color", "color": "green"})
+    srv.handle_message(carol, {"type": "select_color", "color": "blue"})
+    srv.handle_message(alice, {"type": "start_game"})
+    srv.handle_message(alice, {"type": "roll_initial"})
+    srv.handle_message(bob,   {"type": "roll_initial"})
+    srv.handle_message(carol, {"type": "roll_initial"})
+    assert srv.session.current_turn_conn_id() == "c1", "alice should hold the turn"
+
+    # Carol disconnects without it being her turn. The cursor must stay on alice.
+    srv._on_disconnect(carol)
+    assert "blue" in srv.session.disconnected_colors
+    assert srv.session.current_turn_conn_id() == "c1"
+
+    # Alice exhausts her 3 jail-attempt rolls → turn passes to bob.
+    for _ in range(3):
+        srv.handle_message(alice, {"type": "roll_dice"})
+    assert srv.session.current_turn_conn_id() == "c2", "turn should advance to bob"
+
+    # Bob does the same. Cursor would naturally land on carol — server
+    # must auto-skip her and put the cursor back on alice.
+    for _ in range(3):
+        srv.handle_message(bob, {"type": "roll_dice"})
+
+    assert srv.session.current_turn_conn_id() == "c1", (
+        "cursor landed on disconnected carol — game would hang. "
+        f"current={srv.session.current_turn_conn_id()}"
+    )
+
+
 def test_all_players_disconnect_resets_server_to_lobby():
     """When every client from an in-progress game disconnects, the
     server returns to LOBBY so the next client can start a fresh round

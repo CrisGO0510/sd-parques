@@ -169,6 +169,27 @@ class Server:
             "total": d1 + d2,
         })
 
+    def _maybe_skip_disconnected_turn(self) -> None:
+        """If the turn cursor sits on a disconnected color, advance past
+        it and rebroadcast state. Without this, the game freezes whenever
+        play rotates onto a player who left earlier (since they will never
+        send a command). Caller must hold `self.lock`."""
+        if self.phase is not ServerPhase.IN_GAME or self.session is None:
+            return
+        if not self.session.disconnected_colors:
+            return
+        before_idx = self.session.game.current_turn_index
+        self.session.advance_past_disconnected()
+        if self.session.game.current_turn_index != before_idx:
+            logger.info(
+                "auto-skipped disconnected turn; current is now %s",
+                self.session.current_turn_conn_id(),
+            )
+            self._broadcast_session({
+                "type": "state_update",
+                "state": self.session.state_dict(),
+            })
+
     def _reset_to_lobby(self) -> None:
         """Clear any in-progress or finished game and return to LOBBY.
         Caller must hold `self.lock`."""
@@ -244,6 +265,10 @@ class Server:
                 self._dispatch(conn, msg)
             except DomainError as e:
                 self._send_error(conn, self._domain_error_code(e), str(e))
+            # If the turn just advanced onto someone who already left,
+            # skip past them — otherwise the survivors stare at "Esperando…"
+            # forever waiting for a command from a client that's gone.
+            self._maybe_skip_disconnected_turn()
 
     # --- dispatch ---
 
