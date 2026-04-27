@@ -137,4 +137,10 @@ Desde la raíz:
 
 # cliente completo
 cd client && npm run typecheck && npm run lint && npm test
+
+# APK Android (Capacitor)
+cd client && npm run build:android
 ```
+
+El APK queda en `client/src-capacitor/android/app/build/outputs/apk/`. Requiere
+tener instalado Android SDK + JDK y la variable `ANDROID_HOME` configurada.
