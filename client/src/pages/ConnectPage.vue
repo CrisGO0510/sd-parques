@@ -42,10 +42,15 @@ const username = ref<string>(localStorage.getItem(STORAGE_USERNAME) ?? '');
 const connecting = ref<boolean>(false);
 
 // MainLayout's useAppEventSync stores lobby.isHost from WELCOME; we only
-// need this handler to navigate after that state is in place.
+// need this handler to navigate after that state is in place. The ERROR
+// handler clears `connecting` so the user can retry — without it a server
+// rejection (e.g. DUPLICATE_PLAYER) would leave the button spinning forever.
 const { send } = useServerProtocol({
   [ServerEventType.WELCOME]: () => {
     void router.push(Route.LOBBY);
+  },
+  [ServerEventType.ERROR]: () => {
+    connecting.value = false;
   },
 });
 

@@ -3,6 +3,7 @@ import { useServerProtocol } from 'src/composables/useServerProtocol';
 import { useGameStore } from 'src/stores/game';
 import { useLobbyStore } from 'src/stores/lobby';
 import { ServerEventType } from 'src/types/protocol';
+import { friendlyErrorMessage } from 'src/types/errorMessages';
 
 /**
  * Registers server-event handlers that update application state
@@ -55,7 +56,13 @@ export function useAppEventSync(): void {
       game.setWinner(e.winner_username);
     },
     [ServerEventType.ERROR]: (e) => {
-      $q.notify({ color: 'negative', message: e.message, icon: 'error' });
+      $q.notify({
+        color: 'negative',
+        message: friendlyErrorMessage(e.code, e.message),
+        icon: 'error',
+        position: 'bottom',
+        timeout: 3000,
+      });
     },
   });
 }
