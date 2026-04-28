@@ -3,16 +3,23 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 from server.server import Server
 
 
 def main() -> int:
+    def default_ws_port() -> int:
+        try:
+            return int(os.getenv('PORT', '5001'))
+        except ValueError:
+            return 5001
+
     parser = argparse.ArgumentParser(prog="python -m server")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port-tcp", type=int, default=5000, dest="port_tcp")
-    parser.add_argument("--port-ws",  type=int, default=5001, dest="port_ws",
+    parser.add_argument("--port-ws",  type=int, default=default_ws_port(), dest="port_ws",
                         help="WebSocket listener port (0 disables)")
     parser.add_argument("--no-ws",    action="store_true",
                         help="Disable the WebSocket listener entirely")
@@ -31,7 +38,7 @@ def main() -> int:
     server = Server(host=args.host, port=args.port_tcp)
 
     # Start WS listener if requested (must be before serve_forever which blocks).
-    if not args.no_ws and args.port_ws >= 0:
+    if not args.no_ws and args.port_ws > 0:
         import threading
 
         from server.ws_bridge import start_ws_listener

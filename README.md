@@ -43,6 +43,8 @@ pip install -e '.[dev,ws]'
 .venv/bin/python -m server --log-level INFO
 ```
 
+En Render, el backend usa el `PORT` que asigna la plataforma para el listener WebSocket.
+
 Por defecto escucha:
 - **TCP**: `0.0.0.0:5000`
 - **WebSocket**: `0.0.0.0:5001`
@@ -76,6 +78,8 @@ Debe pasar **140+ tests** sin fallos.
 ## 2. Cliente Vue
 
 El cliente se conecta al servidor via WebSocket (`ws://<host>:5001`).
+
+En Render, el cliente usa la URL segura configurada en `VITE_WS_URL`.
 
 ### Instalar
 
@@ -126,6 +130,16 @@ npm run lint        # eslint
    - **Puerto**: `5001`
    - **Usuario**: cualquier nombre
 4. Para probar multijugador, abre **otra pestaña** (o ventana de incógnito) y repite el join con otro nombre. Necesitas **al menos 2 jugadores** para iniciar partida.
+
+## 4. Despliegue en Render
+
+El repo ya incluye un blueprint en [render.yaml](render.yaml). La forma prevista de despliegue es:
+
+1. Crear el servicio backend como Web Service con `python -m server`.
+2. Crear el frontend como Static Site con `client/dist/spa` como salida.
+3. Configurar `VITE_WS_URL` en el frontend con la URL pública del backend, por ejemplo `wss://parques-server.onrender.com`.
+
+Si cambias el nombre público del backend, actualiza también esa URL.
 
 ## Scripts útiles
 

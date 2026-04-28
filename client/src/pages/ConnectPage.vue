@@ -31,13 +31,34 @@ const STORAGE_HOST     = 'parques.host';
 const STORAGE_PORT     = 'parques.port';
 const STORAGE_USERNAME = 'parques.username';
 
+function defaultSocketSettings(): { host: string; port: number } | null {
+  const configuredUrl = import.meta.env.VITE_WS_URL?.trim();
+  if (!configuredUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(configuredUrl);
+    const port = url.port
+      ? Number(url.port)
+      : (url.protocol === 'wss:' ? 443 : 80);
+    if (!Number.isFinite(port) || port <= 0) {
+      return null;
+    }
+    return { host: url.hostname, port };
+  } catch {
+    return null;
+  }
+}
+
 const $q       = useQuasar();
 const router   = useRouter();
 const conn     = useConnectionStore();
 
-const host     = ref<string>(localStorage.getItem(STORAGE_HOST) ?? 'localhost');
+const defaultSocket = defaultSocketSettings();
+const host     = ref<string>(localStorage.getItem(STORAGE_HOST) ?? defaultSocket?.host ?? 'localhost');
 const storedPort = Number(localStorage.getItem(STORAGE_PORT));
-const port     = ref<number>(Number.isFinite(storedPort) && storedPort > 0 ? storedPort : 5001);
+const port     = ref<number>(Number.isFinite(storedPort) && storedPort > 0 ? storedPort : (defaultSocket?.port ?? 5001));
 const username = ref<string>(localStorage.getItem(STORAGE_USERNAME) ?? '');
 const connecting = ref<boolean>(false);
 

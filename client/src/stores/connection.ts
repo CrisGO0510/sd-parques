@@ -11,6 +11,16 @@ export enum ConnectionStatus {
 
 type EventHandler = (e: ServerEvent) => void;
 
+function buildWebSocketUrl(host: string, port: number): string {
+  const configuredUrl = import.meta.env.VITE_WS_URL?.trim();
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  const protocol = globalThis.location?.protocol === 'https:' ? 'wss' : 'ws';
+  return `${protocol}://${host}:${port}`;
+}
+
 export const useConnectionStore = defineStore('connection', () => {
   const status        = ref<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const host          = ref<string>('localhost');
@@ -30,7 +40,7 @@ export const useConnectionStore = defineStore('connection', () => {
     errorMessage.value = null;
 
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://${h}:${p}`);
+      const ws = new WebSocket(buildWebSocketUrl(h, p));
       socket = ws;
       ws.onopen = () => {
         status.value = ConnectionStatus.CONNECTED;
