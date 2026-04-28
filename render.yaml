@@ -2,7 +2,7 @@ services:
   - type: web
     name: parques-server
     runtime: python
-    buildCommand: python -m pip install -e '.[ws]'
+    buildCommand: python -m pip install -e .
     startCommand: python -m server
     envVars:
       - key: PYTHONUNBUFFERED
