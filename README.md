@@ -137,7 +137,7 @@ El repo ya incluye un blueprint en [render.yaml](render.yaml). La forma prevista
 
 1. Crear el servicio backend como Web Service con `python -m server`.
 2. Crear el frontend como Static Site con `client/dist/spa` como salida.
-3. Configurar `VITE_WS_URL` en el frontend con la URL pública del backend, por ejemplo `wss://parques-server.onrender.com`.
+3. Configurar `VITE_WS_URL` en el frontend con la URL pública del backend, por ejemplo `wss://sd-parques.onrender.com`.
 
 Si cambias el nombre público del backend, actualiza también esa URL.
 

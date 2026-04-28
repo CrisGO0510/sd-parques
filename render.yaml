@@ -14,4 +14,4 @@ services:
     staticPublishPath: client/dist/spa
     envVars:
       - key: VITE_WS_URL
-        value: wss://parques-server.onrender.com
+        value: wss://sd-parques.onrender.com

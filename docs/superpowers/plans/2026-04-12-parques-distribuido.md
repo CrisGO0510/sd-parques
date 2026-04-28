@@ -3077,9 +3077,9 @@ services:
         value: no-cache
     envVars:
       - key: VITE_API_URL
-        value: https://parques-server.onrender.com/api
+        value: https://sd-parques.onrender.com/api
       - key: VITE_SOCKET_URL
-        value: https://parques-server.onrender.com
+        value: https://sd-parques.onrender.com
 
 databases:
   - name: parques-db

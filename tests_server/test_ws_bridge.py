@@ -1,5 +1,6 @@
 """E2E tests for the WebSocket bridge."""
 import asyncio
+import socket
 import threading
 
 import pytest
@@ -89,6 +90,35 @@ async def test_ws_client_can_join_lobby():
 
     srv.shutdown()
 
+@pytest.mark.asyncio
+async def test_ws_listener_responds_to_http_probe():
+    """HTTP probes should get a clean 200 instead of a handshake error."""
+    from server.server import Server
+    from server.ws_bridge import start_ws_listener
+
+    srv = Server(host="127.0.0.1", port=0)
+    tcp_thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    tcp_thread.start()
+    srv.wait_ready(timeout=2.0)
+
+    start_ws_listener(srv, "127.0.0.1", 0)
+    for _ in range(50):
+        ws_port = getattr(srv, "ws_port", None)
+        if ws_port:
+            break
+        await asyncio.sleep(0.02)
+    assert ws_port is not None
+
+    sock = socket.create_connection(("127.0.0.1", ws_port), timeout=2.0)
+    try:
+        sock.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        response = sock.recv(4096).decode("utf-8", errors="replace")
+    finally:
+        sock.close()
+        srv.shutdown()
+
+    assert "200 OK" in response
+    assert "ok" in response.lower()
 
 @pytest.mark.asyncio
 async def test_tcp_and_ws_clients_share_lobby():

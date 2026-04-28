@@ -12,9 +12,25 @@ import logging
 import queue
 import threading
 
+from websockets.asyncio.server import Request, Response
+from websockets.datastructures import Headers
+
 from server.server import Server
 
 logger = logging.getLogger(__name__)
+
+
+def _process_http_request(_conn: object, _request: Request) -> Response:
+    """Reply to plain HTTP probes while letting real WebSocket handshakes through."""
+    upgrade = _request.headers.get("Upgrade", "").lower()
+    if upgrade == "websocket" or _request.headers.get("Sec-WebSocket-Key"):
+        return None
+    return Response(
+        200,
+        "OK",
+        Headers([("Content-Type", "text/plain; charset=utf-8")]),
+        b"ok\n",
+    )
 
 
 class WebSocketConnection:
@@ -123,7 +139,12 @@ def start_ws_listener(
         asyncio.set_event_loop(loop)
 
         async def _main() -> None:
-            async with websockets.serve(_handler, host, port) as srv_obj:
+            async with websockets.serve(
+                _handler,
+                host,
+                port,
+                process_request=_process_http_request,
+            ) as srv_obj:
                 # Grab the bound port if we passed 0.
                 bound_port = srv_obj.sockets[0].getsockname()[1]
                 server.ws_port = bound_port
