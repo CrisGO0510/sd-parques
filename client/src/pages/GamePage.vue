@@ -53,7 +53,13 @@
           </div>
         </div>
 
-        <q-btn disable class="q-mt-md full-width" label="Recomendación (pronto)" />
+        <div v-if="recommendation && game.isMyTurn && game.phase === GamePhase.MOVING"
+            class="q-mt-md q-pa-sm rounded-borders"
+            style="background: #fff8e1; border-left: 4px solid #f9a825;">
+          💡 Recomendación: mover la
+          <strong>ficha {{ recommendation.piece_index + 1 }}</strong>
+          con el dado <strong>{{ recommendation.dice_value }}</strong>
+        </div>
 
         <!-- Debug: quick inspection of the client's view of the game state.
              Leave this in for now; we can remove it once the flow feels
@@ -130,6 +136,7 @@ interface PieceOwned { dto: PieceDto; color: Color; playerIndex: number }
 // handled in MainLayout (useAppEventSync). We only own GAME_OVER here for
 // the navigation push — by the time this fires, game.winnerUsername is
 // already set by the layout-level handler.
+const recommendation = computed(() => game.recommendation);
 const { send } = useServerProtocol({
   [ServerEventType.GAME_OVER]: () => {
     void router.push(Route.END);

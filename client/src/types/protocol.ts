@@ -27,6 +27,7 @@ export enum ServerEventType {
   INITIAL_ROLL = 'initial_roll',
   DICE_RESULT = 'dice_result',
   AVAILABLE_MOVES = 'available_moves',
+  RECOMMENDATION = 'recommendation',
   MOVE_APPLIED = 'move_applied',
   GAME_OVER = 'game_over',
   ERROR = 'error',
@@ -83,6 +84,7 @@ export type ServerEvent =
       is_pair: boolean;
     }
   | { type: ServerEventType.AVAILABLE_MOVES; moves: MoveDto[] }
+  | { type: ServerEventType.RECOMMENDATION; piece_index: number; action: string; dice_value: number }
   | { type: ServerEventType.MOVE_APPLIED; move: MoveDto; result: MoveResultDto }
   | {
       type: ServerEventType.GAME_OVER;

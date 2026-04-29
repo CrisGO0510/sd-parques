@@ -14,6 +14,7 @@ from server.connection import ClientConnection
 from server.lobby import Lobby
 from server.protocol import ProtocolError, decode, encode, validate_command
 from server.session import GameSession
+from server.recommender import recommend
 
 logger = logging.getLogger(__name__)
 
@@ -383,6 +384,14 @@ class Server:
                     for m in self.session.available_moves()
                 ]
                 conn.send(encode({"type": "available_moves", "moves": moves}))
+                rec = recommend(self.session.game, self.session.available_moves())
+                if rec is not None:
+                    conn.send(encode({
+                        "type": "recommendation",
+                        "piece_index": rec.piece_index,
+                        "action": rec.action.value,
+                        "dice_value": rec.dice_value,
+                    }))
         elif t == "move_piece":
             from core.entities import Move, MoveAction
             try:
@@ -440,6 +449,13 @@ class Server:
                         for m in self.session.available_moves()
                     ]
                     cur.send(encode({"type": "available_moves", "moves": moves}))
+                    rec = recommend(self.session.game, self.session.available_moves())
+                    if rec is not None:
+                        cur.send(encode({
+                            "type": "recommendation",
+                            "piece_index": rec.piece_index,
+                            "action": rec.action.value,
+                        }))
         elif t == "skip_turn":
             self.session.skip_turn()
             self._broadcast_session({
