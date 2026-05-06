@@ -59,6 +59,9 @@ export function useAppEventSync(): void {
         dice_value: e.dice_value 
       }); 
     },
+    [ServerEventType.CHAT]: (e) => {
+      game.addChatMessage(e.username, e.message);
+    },
     [ServerEventType.GAME_OVER]: (e) => {
       game.setWinner(e.winner_username);
     },

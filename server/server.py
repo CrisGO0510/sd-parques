@@ -475,6 +475,17 @@ class Server:
                     "winner_username": self.session.game.players[self.session.game.winner].name,
                 })
                 self._reset_to_lobby()
+        elif t == "chat":
+            entry = next(
+                (e for e in self.session.entries if e[0] == conn.conn_id),
+                None
+            )
+            username = entry[1] if entry else "Jugador"
+            self._broadcast_session({
+                "type": "chat",
+                "username": username,
+                "message": msg["message"][:200],
+            })
         elif t == "join":
             self._send_error(conn, "FORBIDDEN", "a game is in progress")
         else:

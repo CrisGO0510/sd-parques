@@ -17,6 +17,7 @@ export enum ClientCommandType {
   SKIP_TURN = 'skip_turn',
   CROWN_PIECE = 'crown_piece',
   LEAVE = 'leave',
+  CHAT = 'chat',
 }
 
 export enum ServerEventType {
@@ -31,6 +32,7 @@ export enum ServerEventType {
   MOVE_APPLIED = 'move_applied',
   GAME_OVER = 'game_over',
   ERROR = 'error',
+  CHAT = 'chat',
 }
 
 export enum ErrorCode {
@@ -57,7 +59,8 @@ export type ClientCommand =
     }
   | { type: ClientCommandType.SKIP_TURN }
   | { type: ClientCommandType.CROWN_PIECE; piece_index: number }
-  | { type: ClientCommandType.LEAVE };
+  | { type: ClientCommandType.LEAVE }
+  | { type: ClientCommandType.CHAT; message: string };
 
 export type ServerEvent =
   | { type: ServerEventType.WELCOME; username: string; is_host: boolean }
@@ -85,6 +88,7 @@ export type ServerEvent =
     }
   | { type: ServerEventType.AVAILABLE_MOVES; moves: MoveDto[] }
   | { type: ServerEventType.RECOMMENDATION; piece_index: number; action: string; dice_value: number }
+  | { type: ServerEventType.CHAT; username: string; message: string }
   | { type: ServerEventType.MOVE_APPLIED; move: MoveDto; result: MoveResultDto }
   | {
       type: ServerEventType.GAME_OVER;

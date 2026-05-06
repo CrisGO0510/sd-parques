@@ -35,6 +35,8 @@
           :disconnected-colors="game.state.disconnected_colors"
         />
         <q-separator spaced />
+        <ChatPanel />
+        <q-separator spaced />
         <DiceRoller
           :d1="displayedDice[0]"
           :d2="displayedDice[1]"
@@ -56,7 +58,7 @@
         <div v-if="recommendation && game.isMyTurn && game.phase === GamePhase.MOVING"
             class="q-mt-md q-pa-sm rounded-borders"
             style="background: #fff8e1; border-left: 4px solid #f9a825;">
-          💡 Recomendación: mover la
+          Recomendación: mover la
           <strong>ficha {{ recommendation.piece_index + 1 }}</strong>
           con el dado <strong>{{ recommendation.dice_value }}</strong>
         </div>
@@ -117,6 +119,7 @@ import PieceToken from 'components/PieceToken.vue';
 import DiceRoller from 'components/DiceRoller.vue';
 import PlayerList from 'components/PlayerList.vue';
 import TurnBanner from 'components/TurnBanner.vue';
+import ChatPanel from 'components/chat.vue';
 
 import { useGameStore } from 'src/stores/game';
 import { useServerProtocol } from 'src/composables/useServerProtocol';

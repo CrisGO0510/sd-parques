@@ -14,6 +14,8 @@ export const useGameStore = defineStore('game', () => {
   // cleared (e.g., non-pair roll while all pieces are in jail).
   const lastRoll = ref<LastRoll | null>(null);
   const recommendation = ref<{ piece_index: number; action: string; dice_value: number } | null>(null);
+  interface ChatMessage { username: string; message: string; ts: number }
+  const chatMessages = ref<ChatMessage[]>([]);
 
   const currentTurnColor = computed<Color | null>(() => {
     const st = state.value;
@@ -44,7 +46,10 @@ export const useGameStore = defineStore('game', () => {
 
   function setRecommendation(r: { piece_index: number; action: string; dice_value: number } | null): void {
   recommendation.value = r;
-}
+  }
+  function addChatMessage(username: string, message: string): void {
+    chatMessages.value.push({ username, message, ts: Date.now() });
+  }
 
   function setWinner(u: string | null): void {
     winnerUsername.value = u;
@@ -70,6 +75,7 @@ export const useGameStore = defineStore('game', () => {
     winnerUsername,
     lastRoll,
     recommendation,
+    chatMessages,
     currentTurnColor,
     isMyTurn,
     phase,
@@ -79,6 +85,7 @@ export const useGameStore = defineStore('game', () => {
     setWinner,
     setLastRoll,
     setRecommendation,
+    addChatMessage,
     reset,
   };
 });
