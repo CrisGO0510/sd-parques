@@ -5,6 +5,7 @@ export enum Route {
   LOBBY   = '/lobby',
   GAME    = '/game',
   END     = '/end',
+  RANKING = '/ranking',
 }
 
 const routes: RouteRecordRaw[] = [
@@ -27,6 +28,11 @@ const routes: RouteRecordRaw[] = [
       {
         path: Route.END,
         component: () => import('pages/EndPage.vue'),
+        meta: { requiresConnection: true },
+      },
+      {
+        path: Route.RANKING,
+        component: () => import('pages/RankingPage.vue'),
         meta: { requiresConnection: true },
       },
     ],

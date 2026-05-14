@@ -34,16 +34,19 @@ def decode(raw: bytes) -> dict[str, Any]:
 # Command schemas: maps type → {field_name: expected_type}.
 # Empty dict means "no fields required beyond type".
 COMMAND_SCHEMAS: dict[str, dict[str, type]] = {
-    "join":         {"username": str},
-    "select_color": {"color": str},
-    "start_game":   {},
-    "roll_initial": {},
-    "roll_dice":    {},
-    "move_piece":   {"piece_index": int, "dice_value": int, "action": str},
-    "skip_turn":    {},
-    "crown_piece":  {"piece_index": int},
-    "leave":        {},
-    "chat":         {"message": str},
+    "join":           {"username": str},
+    "select_color":   {"color": str},
+    "start_game":     {},
+    "roll_initial":   {},
+    "roll_dice":      {},
+    "move_piece":     {"piece_index": int, "dice_value": int, "action": str},
+    "skip_turn":      {},
+    "crown_piece":    {"piece_index": int},
+    "leave":          {},
+    "chat":           {"message": str},
+    "verify_player":  {"username": str},
+    "get_ranking":    {},
+    "report_win":     {"player_id": int},
 }
 
 

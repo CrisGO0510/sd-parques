@@ -18,6 +18,9 @@ export enum ClientCommandType {
   CROWN_PIECE = 'crown_piece',
   LEAVE = 'leave',
   CHAT = 'chat',
+  VERIFY_PLAYER = 'verify_player',
+  GET_RANKING = 'get_ranking',
+  REPORT_WIN = 'report_win',
 }
 
 export enum ServerEventType {
@@ -33,6 +36,9 @@ export enum ServerEventType {
   GAME_OVER = 'game_over',
   ERROR = 'error',
   CHAT = 'chat',
+  PLAYER_VERIFIED = 'player_verified',
+  RANKING_UPDATE = 'ranking_update',
+  STATS_UPDATED = 'stats_updated',
 }
 
 export enum ErrorCode {
@@ -43,6 +49,7 @@ export enum ErrorCode {
   INVALID_MOVE = 'INVALID_MOVE',
   FORBIDDEN = 'FORBIDDEN',
   GAME_ENDED = 'GAME_ENDED',
+  DB_ERROR = 'DB_ERROR',
 }
 
 export type ClientCommand =
@@ -60,7 +67,10 @@ export type ClientCommand =
   | { type: ClientCommandType.SKIP_TURN }
   | { type: ClientCommandType.CROWN_PIECE; piece_index: number }
   | { type: ClientCommandType.LEAVE }
-  | { type: ClientCommandType.CHAT; message: string };
+  | { type: ClientCommandType.CHAT; message: string }
+  | { type: ClientCommandType.VERIFY_PLAYER; username: string }
+  | { type: ClientCommandType.GET_RANKING }
+  | { type: ClientCommandType.REPORT_WIN; player_id: number };
 
 export type ServerEvent =
   | { type: ServerEventType.WELCOME; username: string; is_host: boolean }
@@ -95,7 +105,30 @@ export type ServerEvent =
       winner_index: number | null;
       winner_username: string | null;
     }
-  | { type: ServerEventType.ERROR; code: ErrorCode; message: string };
+  | { type: ServerEventType.ERROR; code: ErrorCode; message: string }
+  | {
+      type: ServerEventType.PLAYER_VERIFIED;
+      player_id: number;
+      username: string;
+      games_played: number;
+      games_won: number;
+    }
+  | {
+      type: ServerEventType.RANKING_UPDATE;
+      players: Array<{
+        id: number;
+        username: string;
+        games_played: number;
+        games_won: number;
+        win_percentage?: number;
+      }>;
+    }
+  | {
+      type: ServerEventType.STATS_UPDATED;
+      player_id: number;
+      games_played: number;
+      games_won: number;
+    };
 
 export function assertNever(x: never): never {
   throw new Error(`unexpected value in exhaustive switch: ${JSON.stringify(x)}`);

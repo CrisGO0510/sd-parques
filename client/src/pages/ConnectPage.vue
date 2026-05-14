@@ -23,6 +23,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { useConnectionStore } from 'src/stores/connection';
+import { useRankingStore } from 'src/stores/ranking';
 import { useServerProtocol } from 'src/composables/useServerProtocol';
 import { ClientCommandType, ServerEventType } from 'src/types/protocol';
 import { Route } from 'src/router/routes';
@@ -51,9 +52,10 @@ function defaultSocketSettings(): { host: string; port: number } | null {
   }
 }
 
-const $q       = useQuasar();
-const router   = useRouter();
-const conn     = useConnectionStore();
+const $q           = useQuasar();
+const router       = useRouter();
+const conn         = useConnectionStore();
+const rankingStore = useRankingStore();
 
 const defaultSocket = defaultSocketSettings();
 const host     = ref<string>(localStorage.getItem(STORAGE_HOST) ?? defaultSocket?.host ?? 'localhost');
@@ -82,6 +84,16 @@ async function onConnect(): Promise<void> {
     localStorage.setItem(STORAGE_HOST,     host.value);
     localStorage.setItem(STORAGE_PORT,     String(port.value));
     localStorage.setItem(STORAGE_USERNAME, username.value);
+    
+    // First verify/register the player
+    try {
+      await rankingStore.verifyPlayer(username.value);
+    } catch (error) {
+      console.error('Error verifying player:', error);
+      // Continue anyway - the game can still work
+    }
+    
+    // Then join the game
     send({ type: ClientCommandType.JOIN, username: username.value });
   } catch {
     connecting.value = false;

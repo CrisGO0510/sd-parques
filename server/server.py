@@ -15,6 +15,7 @@ from server.lobby import Lobby
 from server.protocol import ProtocolError, decode, encode, validate_command
 from server.session import GameSession
 from server.recommender import recommend
+from server.db_config import DatabaseConfig, PlayerDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class Server:
         host: str = "0.0.0.0",
         port: int = 5000,
         rng: random.Random | None = None,
+        db_config: DatabaseConfig | None = None,
     ):
         self.host = host
         self.port = port
@@ -52,6 +54,15 @@ class Server:
         self._ready = threading.Event()
         self._next_conn_id = 0
         self._client_threads: list[threading.Thread] = []
+        
+        # Initialize database
+        if db_config is None:
+            db_config = DatabaseConfig()
+        self.db_config = db_config
+        self.player_db = PlayerDatabase(db_config)
+        
+        # Map conn_id to player_id for ranking purposes
+        self._conn_to_player_id: dict[str, int] = {}
 
     def serve_forever(self) -> None:
         self._listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -283,7 +294,31 @@ class Server:
 
     def _dispatch_lobby(self, conn, msg: dict) -> None:
         t = msg["type"]
-        if t == "join":
+        if t == "verify_player":
+            try:
+                player_data = self.player_db.get_or_create_player(msg["username"])
+                self._conn_to_player_id[conn.conn_id] = player_data["id"]
+                conn.send(encode({
+                    "type": "player_verified",
+                    "player_id": player_data["id"],
+                    "username": player_data["username"],
+                    "games_played": player_data["games_played"],
+                    "games_won": player_data["games_won"],
+                }))
+            except Exception as e:
+                logger.error(f"Error verifying player: {e}")
+                self._send_error(conn, "DB_ERROR", f"Error verifying player: {str(e)}")
+        elif t == "get_ranking":
+            try:
+                players = self.player_db.get_all_players()
+                conn.send(encode({
+                    "type": "ranking_update",
+                    "players": players,
+                }))
+            except Exception as e:
+                logger.error(f"Error fetching ranking: {e}")
+                self._send_error(conn, "DB_ERROR", f"Error fetching ranking: {str(e)}")
+        elif t == "join":
             player = self.lobby.join(conn.conn_id, msg["username"])
             conn.send(encode({
                 "type": "welcome",
@@ -322,6 +357,16 @@ class Server:
         ]
         self.session = GameSession(entries=entries, rng=self._rng)
         self.phase = ServerPhase.IN_GAME
+        
+        # Increment games_played for all players starting the game
+        for conn_id, username, color in entries:
+            if conn_id in self._conn_to_player_id:
+                player_id = self._conn_to_player_id[conn_id]
+                try:
+                    self.player_db.update_player_stats(player_id, game_won=False)
+                except Exception as e:
+                    logger.warning(f"Error updating games_played for {username}: {e}")
+        
         self._broadcast_session({"type": "game_started"})
         self._broadcast_session({"type": "state_update", "state": self.session.state_dict()})
 
@@ -486,6 +531,22 @@ class Server:
                 "username": username,
                 "message": msg["message"][:200],
             })
+        elif t == "report_win":
+            player_id = msg.get("player_id")
+            if player_id is None:
+                self._send_error(conn, "BAD_MESSAGE", "missing player_id")
+                return
+            try:
+                updated_player = self.player_db.update_player_stats(player_id, game_won=True)
+                conn.send(encode({
+                    "type": "stats_updated",
+                    "player_id": updated_player["id"],
+                    "games_played": updated_player["games_played"],
+                    "games_won": updated_player["games_won"],
+                }))
+            except Exception as e:
+                logger.error(f"Error updating player stats: {e}")
+                self._send_error(conn, "DB_ERROR", f"Error updating stats: {str(e)}")
         elif t == "join":
             self._send_error(conn, "FORBIDDEN", "a game is in progress")
         else:
