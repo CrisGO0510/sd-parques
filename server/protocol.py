@@ -43,6 +43,7 @@ COMMAND_SCHEMAS: dict[str, dict[str, type]] = {
     "skip_turn":    {},
     "crown_piece":  {"piece_index": int},
     "leave":        {},
+    "chat":         {"message": str},
 }
 
 

@@ -13,6 +13,9 @@ export const useGameStore = defineStore('game', () => {
   // can still see what they rolled even when `pending_dice` has been
   // cleared (e.g., non-pair roll while all pieces are in jail).
   const lastRoll = ref<LastRoll | null>(null);
+  const recommendation = ref<{ piece_index: number; action: string; dice_value: number } | null>(null);
+  interface ChatMessage { username: string; message: string; ts: number }
+  const chatMessages = ref<ChatMessage[]>([]);
 
   const currentTurnColor = computed<Color | null>(() => {
     const st = state.value;
@@ -41,6 +44,13 @@ export const useGameStore = defineStore('game', () => {
     availableMoves.value = moves;
   }
 
+  function setRecommendation(r: { piece_index: number; action: string; dice_value: number } | null): void {
+  recommendation.value = r;
+  }
+  function addChatMessage(username: string, message: string): void {
+    chatMessages.value.push({ username, message, ts: Date.now() });
+  }
+
   function setWinner(u: string | null): void {
     winnerUsername.value = u;
   }
@@ -55,6 +65,7 @@ export const useGameStore = defineStore('game', () => {
     myColor.value = null;
     winnerUsername.value = null;
     lastRoll.value = null;
+    recommendation.value = null;
   }
 
   return {
@@ -63,6 +74,8 @@ export const useGameStore = defineStore('game', () => {
     myColor,
     winnerUsername,
     lastRoll,
+    recommendation,
+    chatMessages,
     currentTurnColor,
     isMyTurn,
     phase,
@@ -71,6 +84,8 @@ export const useGameStore = defineStore('game', () => {
     setAvailableMoves,
     setWinner,
     setLastRoll,
+    setRecommendation,
+    addChatMessage,
     reset,
   };
 });

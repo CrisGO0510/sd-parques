@@ -52,6 +52,16 @@ export function useAppEventSync(): void {
     [ServerEventType.AVAILABLE_MOVES]: (e) => {
       game.setAvailableMoves(e.moves);
     },
+    [ServerEventType.RECOMMENDATION]: (e) => { 
+      game.setRecommendation({ 
+        piece_index: e.piece_index, 
+        action: e.action, 
+        dice_value: e.dice_value 
+      }); 
+    },
+    [ServerEventType.CHAT]: (e) => {
+      game.addChatMessage(e.username, e.message);
+    },
     [ServerEventType.GAME_OVER]: (e) => {
       game.setWinner(e.winner_username);
     },
