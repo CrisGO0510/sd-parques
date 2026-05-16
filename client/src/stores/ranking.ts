@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useConnectionStore } from './connection';
 import type { ClientCommand, ServerEvent } from 'src/types/protocol';
+import { ClientCommandType, ServerEventType } from 'src/types/protocol';
 
 export interface PlayerStats {
   id: number;
@@ -37,27 +38,27 @@ export const useRankingStore = defineStore('ranking', () => {
       
       // Send verify_player command
       const cmd: ClientCommand = {
-        type: 'verify_player',
+        type: ClientCommandType.VERIFY_PLAYER,
         username,
       };
-      connectionStore.send(cmd as any);
+      connectionStore.send(cmd);
       
       // Wait for response
       return new Promise((resolve, reject) => {
         const unsubscribe = connectionStore.onEvent((event: ServerEvent) => {
-          if (event.type === 'player_verified') {
+          if (event.type === ServerEventType.PLAYER_VERIFIED) {
             const playerData: PlayerStats = {
-              id: (event as any).player_id,
-              username: (event as any).username,
-              games_played: (event as any).games_played,
-              games_won: (event as any).games_won,
+              id: event.player_id,
+              username: event.username,
+              games_played: event.games_played,
+              games_won: event.games_won,
             };
             currentPlayer.value = playerData;
             unsubscribe();
             resolve(playerData);
-          } else if (event.type === 'error') {
+          } else if (event.type === ServerEventType.ERROR) {
             unsubscribe();
-            reject(new Error((event as any).message));
+            reject(new Error(event.message));
           }
         });
         
@@ -79,21 +80,21 @@ export const useRankingStore = defineStore('ranking', () => {
       
       // Send get_ranking command
       const cmd: ClientCommand = {
-        type: 'get_ranking',
+        type: ClientCommandType.GET_RANKING,
       };
-      connectionStore.send(cmd as any);
+      connectionStore.send(cmd);
       
       // Wait for response
       return new Promise((resolve, reject) => {
         const unsubscribe = connectionStore.onEvent((event: ServerEvent) => {
-          if (event.type === 'ranking_update') {
-            const players = (event as any).players || [];
+          if (event.type === ServerEventType.RANKING_UPDATE) {
+            const players = event.players || [];
             ranking.value = players;
             unsubscribe();
             resolve(players);
-          } else if (event.type === 'error') {
+          } else if (event.type === ServerEventType.ERROR) {
             unsubscribe();
-            reject(new Error((event as any).message));
+            reject(new Error(event.message));
           }
         });
         
@@ -117,27 +118,27 @@ export const useRankingStore = defineStore('ranking', () => {
     
     try {
       const cmd: ClientCommand = {
-        type: 'report_win',
+        type: ClientCommandType.REPORT_WIN,
         player_id: currentPlayer.value.id,
       };
-      connectionStore.send(cmd as any);
+      connectionStore.send(cmd);
       
       // Wait for response
       return new Promise((resolve, reject) => {
         const unsubscribe = connectionStore.onEvent((event: ServerEvent) => {
-          if (event.type === 'stats_updated') {
+          if (event.type === ServerEventType.STATS_UPDATED) {
             const updated: PlayerStats = {
-              id: (event as any).player_id,
+              id: event.player_id,
               username: currentPlayer.value?.username || '',
-              games_played: (event as any).games_played,
-              games_won: (event as any).games_won,
+              games_played: event.games_played,
+              games_won: event.games_won,
             };
             currentPlayer.value = updated;
             unsubscribe();
             resolve(updated);
-          } else if (event.type === 'error') {
+          } else if (event.type === ServerEventType.ERROR) {
             unsubscribe();
-            reject(new Error((event as any).message));
+            reject(new Error(event.message));
           }
         });
         

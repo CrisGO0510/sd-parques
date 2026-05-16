@@ -104,12 +104,13 @@
 import { useRouter } from 'vue-router';
 import { useLobbyStore } from 'src/stores/lobby';
 import { useGameStore } from 'src/stores/game';
+import type { PlayerStats } from 'src/stores/ranking';
 import { useRankingStore } from 'src/stores/ranking';
 import { useServerProtocol } from 'src/composables/useServerProtocol';
 import { ClientCommandType, ServerEventType } from 'src/types/protocol';
 import { Color } from 'src/types/domain';
 import { Route } from 'src/router/routes';
-import { QTableProps } from 'quasar';
+
 import { onMounted } from 'vue';
 
 const router = useRouter();
@@ -134,37 +135,37 @@ const COLOR_HEX: Record<Color, string> = {
   [Color.YELLOW]: '#f1c40f',
 };
 
-const rankingColumns: QTableProps['columns'] = [
+const rankingColumns = [
   {
     name: 'rank',
     label: '#',
     field: 'rank',
-    align: 'center',
+    align: 'center' as const,
     style: 'width: 50px',
   },
   {
     name: 'username',
     label: 'Jugador',
     field: 'username',
-    align: 'left',
+    align: 'left' as const,
   },
   {
     name: 'games_played',
     label: 'Partidas',
     field: 'games_played',
-    align: 'center',
+    align: 'center' as const,
   },
   {
     name: 'games_won',
     label: 'Victorias',
     field: 'games_won',
-    align: 'center',
+    align: 'center' as const,
   },
   {
     name: 'win_percentage',
     label: '% Victoria',
     field: 'win_percentage',
-    align: 'center',
+    align: 'center' as const,
   },
 ];
 
@@ -176,7 +177,7 @@ function colorBtnStyle(color: Color): Record<string, string> {
   return { backgroundColor: COLOR_HEX[color], color: 'white' };
 }
 
-function calculateWinPercentage(player: any): number {
+function calculateWinPercentage(player: PlayerStats): number {
   if (!player.games_played || player.games_played === 0) return 0;
   return Math.round((player.games_won / player.games_played) * 100);
 }

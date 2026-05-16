@@ -44,6 +44,7 @@ COMMAND_SCHEMAS: dict[str, dict[str, type]] = {
     "crown_piece":    {"piece_index": int},
     "leave":          {},
     "chat":           {"message": str},
+    "time_response": {"client_time": int},
     "verify_player":  {"username": str},
     "get_ranking":    {},
     "report_win":     {"player_id": int},

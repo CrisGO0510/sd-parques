@@ -2,8 +2,9 @@ import { useQuasar } from 'quasar';
 import { useServerProtocol } from 'src/composables/useServerProtocol';
 import { useGameStore } from 'src/stores/game';
 import { useLobbyStore } from 'src/stores/lobby';
-import { ServerEventType } from 'src/types/protocol';
+import { ServerEventType, ClientCommandType } from 'src/types/protocol';
 import { friendlyErrorMessage } from 'src/types/errorMessages';
+import { useConnectionStore } from 'src/stores/connection';
 
 /**
  * Registers server-event handlers that update application state
@@ -22,10 +23,22 @@ export function useAppEventSync(): void {
   const $q    = useQuasar();
   const lobby = useLobbyStore();
   const game  = useGameStore();
+  const connectionStore = useConnectionStore();
 
   useServerProtocol({
     [ServerEventType.WELCOME]: (e) => {
       lobby.isHost = e.is_host;
+    },
+    [ServerEventType.TIME_REQUEST]: () => {
+      const clientTime = Date.now();
+      connectionStore.send({
+        type: ClientCommandType.TIME_RESPONSE,
+        client_time: clientTime,
+      });
+    },
+    [ServerEventType.TIME_ADJUST]: (e) => {
+      // Guardar el ajuste para usarlo en logs o mostrar en debug
+      console.info(`[Berkeley] ajuste de reloj: ${e.adjust_ms}ms`);
     },
     [ServerEventType.LOBBY_UPDATE]: (e) => {
       lobby.updateFromLobbyUpdate(e.players, e.available_colors);

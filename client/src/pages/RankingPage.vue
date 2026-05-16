@@ -62,48 +62,49 @@
 </template>
 
 <script setup lang="ts">
-import { QTableProps } from 'quasar';
+
 import { onMounted } from 'vue';
+import type { PlayerStats as PlayerStatsType } from 'src/stores/ranking';
 import { useRankingStore } from 'src/stores/ranking';
 import PlayerStats from 'src/components/PlayerStats.vue';
 
 const rankingStore = useRankingStore();
 
-const columns: QTableProps['columns'] = [
+const columns = [
   {
     name: 'rank',
     label: '#',
     field: 'rank',
-    align: 'center',
+    align: 'center' as const,
     style: 'width: 50px',
   },
   {
     name: 'username',
     label: 'Jugador',
     field: 'username',
-    align: 'left',
+    align: 'left' as const,
   },
   {
     name: 'games_played',
     label: 'Partidas',
     field: 'games_played',
-    align: 'center',
+    align: 'center' as const,
   },
   {
     name: 'games_won',
     label: 'Victorias',
     field: 'games_won',
-    align: 'center',
+    align: 'center' as const,
   },
   {
     name: 'win_percentage',
     label: '% Victoria',
     field: 'win_percentage',
-    align: 'center',
+    align: 'center' as const,
   },
 ];
 
-function calculateWinPercentage(player: any): number {
+function calculateWinPercentage(player: PlayerStatsType): number {
   if (player.games_played === 0) return 0;
   return Math.round((player.games_won / player.games_played) * 100);
 }
@@ -117,6 +118,6 @@ async function loadRanking(): Promise<void> {
 }
 
 onMounted(() => {
-  loadRanking();
+  void loadRanking();
 });
 </script>

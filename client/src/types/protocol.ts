@@ -21,6 +21,7 @@ export enum ClientCommandType {
   VERIFY_PLAYER = 'verify_player',
   GET_RANKING = 'get_ranking',
   REPORT_WIN = 'report_win',
+  TIME_RESPONSE = 'time_response',
 }
 
 export enum ServerEventType {
@@ -39,6 +40,8 @@ export enum ServerEventType {
   PLAYER_VERIFIED = 'player_verified',
   RANKING_UPDATE = 'ranking_update',
   STATS_UPDATED = 'stats_updated',
+  TIME_REQUEST = 'time_request',
+  TIME_ADJUST  = 'time_adjust',
 }
 
 export enum ErrorCode {
@@ -70,7 +73,8 @@ export type ClientCommand =
   | { type: ClientCommandType.CHAT; message: string }
   | { type: ClientCommandType.VERIFY_PLAYER; username: string }
   | { type: ClientCommandType.GET_RANKING }
-  | { type: ClientCommandType.REPORT_WIN; player_id: number };
+  | { type: ClientCommandType.REPORT_WIN; player_id: number }
+  | { type: ClientCommandType.TIME_RESPONSE; client_time: number };
 
 export type ServerEvent =
   | { type: ServerEventType.WELCOME; username: string; is_host: boolean }
@@ -128,7 +132,9 @@ export type ServerEvent =
       player_id: number;
       games_played: number;
       games_won: number;
-    };
+    }
+    | { type: ServerEventType.TIME_REQUEST; server_time: number }
+  | { type: ServerEventType.TIME_ADJUST;  adjust_ms: number };
 
 export function assertNever(x: never): never {
   throw new Error(`unexpected value in exhaustive switch: ${JSON.stringify(x)}`);

@@ -16,6 +16,7 @@ from server.protocol import ProtocolError, decode, encode, validate_command
 from server.session import GameSession
 from server.recommender import recommend
 from server.db_config import DatabaseConfig, PlayerDatabase
+from server.berkeley import BerkeleySync
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,11 @@ class Server:
         
         # Map conn_id to player_id for ranking purposes
         self._conn_to_player_id: dict[str, int] = {}
+        self._berkeley = BerkeleySync(
+            get_connections=lambda: dict(self._connections),
+            send_fn=lambda conn, data: conn.send(data),
+            encode_fn=encode,
+        )
 
     def serve_forever(self) -> None:
         self._listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -342,6 +348,13 @@ class Server:
             if not self.lobby.can_start():
                 self._send_error(conn, "FORBIDDEN", "need 2-4 players with color assigned")
                 return
+            # Sincronización de relojes con Berkeley al iniciar la partida
+            sync_thread = threading.Thread(
+                target=self._berkeley.run,
+                daemon=True,
+                name="berkeley-sync",
+            )
+            sync_thread.start()
             self._start_game()
         elif t == "leave":
             self.lobby.leave(conn.conn_id)
@@ -531,6 +544,8 @@ class Server:
                 "username": username,
                 "message": msg["message"][:200],
             })
+        elif t == "time_response":
+            self._berkeley.handle_response(conn.conn_id, msg["client_time"])
         elif t == "report_win":
             player_id = msg.get("player_id")
             if player_id is None:
