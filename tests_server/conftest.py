@@ -12,13 +12,25 @@ import pytest
 from server.server import Server
 
 
+def inline_bot_delay(_delay_seconds, cb):
+    """Run a scheduled bot callback synchronously, no thread, no real delay.
+    Makes integration tests with bots deterministic."""
+    cb()
+    return None  # No timer object; BotRunner._cancel_one tolerates None.
+
+
 @pytest.fixture
 def server_factory():
     """Spawn a Server in a daemon thread; cleanup on fixture teardown."""
     servers: list[Server] = []
 
-    def _make(rng=None) -> tuple[str, int]:
-        srv = Server(host="127.0.0.1", port=0, rng=rng)
+    def _make(rng=None, bot_delay_fn=None) -> tuple[str, int]:
+        srv = Server(
+            host="127.0.0.1",
+            port=0,
+            rng=rng,
+            bot_delay_fn=bot_delay_fn,
+        )
         thread = threading.Thread(target=srv.serve_forever, daemon=True)
         thread.start()
         srv.wait_ready(timeout=2.0)

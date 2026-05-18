@@ -17,6 +17,8 @@ export enum ClientCommandType {
   SKIP_TURN = 'skip_turn',
   CROWN_PIECE = 'crown_piece',
   LEAVE = 'leave',
+  ADD_BOT = 'add_bot',
+  REMOVE_BOT = 'remove_bot',
   CHAT = 'chat',
   VERIFY_PLAYER = 'verify_player',
   GET_RANKING = 'get_ranking',
@@ -70,6 +72,8 @@ export type ClientCommand =
   | { type: ClientCommandType.SKIP_TURN }
   | { type: ClientCommandType.CROWN_PIECE; piece_index: number }
   | { type: ClientCommandType.LEAVE }
+  | { type: ClientCommandType.ADD_BOT }
+  | { type: ClientCommandType.REMOVE_BOT; color: Color }
   | { type: ClientCommandType.CHAT; message: string }
   | { type: ClientCommandType.VERIFY_PLAYER; username: string }
   | { type: ClientCommandType.GET_RANKING }

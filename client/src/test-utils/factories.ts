@@ -21,6 +21,7 @@ export function makePlayer(overrides: Partial<PlayerDto> = {}): PlayerDto {
       makePiece({ index: 2 }),
       makePiece({ index: 3 }),
     ],
+    is_bot: false,
     ...overrides,
   };
 }

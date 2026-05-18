@@ -10,13 +10,15 @@ from typing import Any
 
 from core.entities import Color
 from core.exceptions import DomainError, DuplicatePlayer, InvalidMove, WrongPhase
+from server.bot_runner import BotRunner, DelayFn
 from server.connection import ClientConnection
-from server.lobby import Lobby
+from server.lobby import Lobby, MAX_BOTS, MAX_PLAYERS
 from server.protocol import ProtocolError, decode, encode, validate_command
-from server.session import GameSession
+from server.session import GameSession, SessionEntry
 from server.recommender import recommend
 from server.db_config import DatabaseConfig, PlayerDatabase
 from server.berkeley import BerkeleySync
+from core.entities import GamePhase
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +43,15 @@ class Server:
         port: int = 5000,
         rng: random.Random | None = None,
         db_config: DatabaseConfig | None = None,
+        bot_delay_fn: DelayFn | None = None,
     ):
         self.host = host
         self.port = port
         self._rng = rng
-        self.lock = threading.Lock()
+        # RLock so a bot's inline tick (in tests with bot_delay_fn=inline) can
+        # re-enter the same thread; real production timers run on separate
+        # threads and acquire it normally.
+        self.lock = threading.RLock()
         self.phase: ServerPhase = ServerPhase.LOBBY
         self.lobby: Lobby = Lobby()
         self.session: GameSession | None = None
@@ -68,6 +74,12 @@ class Server:
             get_connections=lambda: dict(self._connections),
             send_fn=lambda conn, data: conn.send(data),
             encode_fn=encode,
+        )
+        self._session_epoch = 0
+        self.bots = BotRunner(
+            self,
+            rng=(rng or random.Random()),
+            delay_fn=bot_delay_fn,
         )
 
     def serve_forever(self) -> None:
@@ -145,6 +157,11 @@ class Server:
             if self.phase is ServerPhase.LOBBY:
                 self.lobby.leave(conn.conn_id)
                 self.unregister_connection(conn.conn_id)
+                # Si tras la salida no quedan humanos pero sí bots, limpiar
+                # bots huérfanos: no tiene sentido mantenerlos sin host.
+                if (self.lobby.host_conn_id() is None
+                        and any(p.is_bot for p in self.lobby.players())):
+                    self.lobby.clear_bots()
                 self._broadcast_lobby(self._lobby_update())
             elif self.phase is ServerPhase.IN_GAME:
                 self._handle_ingame_leave(conn)
@@ -211,8 +228,9 @@ class Server:
     def _reset_to_lobby(self) -> None:
         """Clear any in-progress or finished game and return to LOBBY.
         Caller must hold `self.lock`."""
+        self.bots.cancel_all()
         logger.info(
-            "no active connections left, resetting %s → LOBBY",
+            "resetting %s → LOBBY",
             self.phase.value,
         )
         self.phase = ServerPhase.LOBBY
@@ -250,7 +268,11 @@ class Server:
         return {
             "type": "lobby_update",
             "players": [
-                {"username": p.username, "color": (p.color.value if p.color else None)}
+                {
+                    "username": p.username,
+                    "color":    (p.color.value if p.color else None),
+                    "is_bot":   p.is_bot,
+                }
                 for p in self.lobby.players()
             ],
             "available_colors": [c.value for c in self.lobby.available_colors()],
@@ -287,6 +309,8 @@ class Server:
             # skip past them — otherwise the survivors stare at "Esperando…"
             # forever waiting for a command from a client that's gone.
             self._maybe_skip_disconnected_turn()
+            # After any state change, see if a bot should play next.
+            self._maybe_schedule_bots()
 
     # --- dispatch ---
 
@@ -356,6 +380,52 @@ class Server:
             )
             sync_thread.start()
             self._start_game()
+        elif t == "add_bot":
+            host_conn_id = self.lobby.host_conn_id()
+            if host_conn_id != conn.conn_id:
+                self._send_error(conn, "FORBIDDEN",
+                                 "only the host can add bots")
+                return
+            bot_count = sum(1 for p in self.lobby.players() if p.is_bot)
+            if bot_count >= MAX_BOTS:
+                self._send_error(conn, "FORBIDDEN", f"max {MAX_BOTS} bots")
+                return
+            if len(self.lobby.players()) >= MAX_PLAYERS:
+                self._send_error(conn, "FORBIDDEN", "lobby is full")
+                return
+            available = self.lobby.available_colors()
+            if not available:
+                self._send_error(conn, "FORBIDDEN", "no colors available")
+                return
+            try:
+                self.lobby.add_bot(available[0])
+            except DomainError as e:
+                self._send_error(conn, self._domain_error_code(e), str(e))
+                return
+            self._broadcast_lobby(self._lobby_update())
+        elif t == "remove_bot":
+            host_conn_id = self.lobby.host_conn_id()
+            if host_conn_id != conn.conn_id:
+                self._send_error(conn, "FORBIDDEN",
+                                 "only the host can remove bots")
+                return
+            try:
+                color = Color(msg["color"])
+            except ValueError:
+                self._send_error(conn, "BAD_MESSAGE",
+                                 f"invalid color: {msg['color']}")
+                return
+            target = next(
+                (p for p in self.lobby.players()
+                 if p.color is color and p.is_bot),
+                None,
+            )
+            if target is None:
+                self._send_error(conn, "BAD_MESSAGE",
+                                 f"no bot with color {color.value}")
+                return
+            self.lobby.remove_bot(target.conn_id)
+            self._broadcast_lobby(self._lobby_update())
         elif t == "leave":
             self.lobby.leave(conn.conn_id)
             self.unregister_connection(conn.conn_id)
@@ -365,23 +435,57 @@ class Server:
 
     def _start_game(self) -> None:
         entries = [
-            (p.conn_id, p.username, p.color)
+            SessionEntry(
+                conn_id=p.conn_id,
+                username=p.username,
+                color=p.color,
+                is_bot=p.is_bot,
+            )
             for p in self.lobby.players()
         ]
         self.session = GameSession(entries=entries, rng=self._rng)
         self.phase = ServerPhase.IN_GAME
-        
-        # Increment games_played for all players starting the game
-        for conn_id, username, color in entries:
-            if conn_id in self._conn_to_player_id:
-                player_id = self._conn_to_player_id[conn_id]
+
+        # Increment games_played for human players starting the game.
+        for entry in entries:
+            if entry.is_bot:
+                continue
+            if entry.conn_id in self._conn_to_player_id:
+                player_id = self._conn_to_player_id[entry.conn_id]
                 try:
                     self.player_db.update_player_stats(player_id, game_won=False)
                 except Exception as e:
-                    logger.warning(f"Error updating games_played for {username}: {e}")
-        
+                    logger.warning(f"Error updating games_played for {entry.username}: {e}")
+
         self._broadcast_session({"type": "game_started"})
         self._broadcast_session({"type": "state_update", "state": self.session.state_dict()})
+        self._session_epoch += 1
+        self.bots.bind_session(self.session, self._session_epoch)
+        self._maybe_schedule_bots()
+
+    def _maybe_schedule_bots(self) -> None:
+        """Schedule the next bot tick(s) after any state change.
+        Caller must hold self.lock."""
+        if self.session is None:
+            return
+        game = self.session.game
+        if game.phase is GamePhase.FINISHED:
+            return
+        bot_ids = set(self.session.bot_conn_ids())
+        if not bot_ids:
+            return
+        if game.phase is GamePhase.SETUP:
+            for cid in bot_ids:
+                player_idx = self.session.player_index_for_conn(cid)
+                if player_idx is None:
+                    continue
+                if player_idx in game.initial_rolls:
+                    continue
+                self.bots.schedule(cid)
+            return
+        current = self.session.current_turn_conn_id()
+        if current in bot_ids:
+            self.bots.schedule(current)
 
     def _dispatch_game(self, conn, msg: dict) -> None:
         assert self.session is not None
@@ -535,10 +639,10 @@ class Server:
                 self._reset_to_lobby()
         elif t == "chat":
             entry = next(
-                (e for e in self.session.entries if e[0] == conn.conn_id),
+                (e for e in self.session.entries if e.conn_id == conn.conn_id),
                 None
             )
-            username = entry[1] if entry else "Jugador"
+            username = entry.username if entry else "Jugador"
             self._broadcast_session({
                 "type": "chat",
                 "username": username,
@@ -608,11 +712,23 @@ class Server:
                         for m in moves
                     ],
                 })
-            if self.session.connected_count() < 2:
-                # End the game.
-                last = self.session.game.winner  # may already be set
+            # Three-case dispatch:
+            #  1) ≥1 human connected and ≥2 total → continue normally.
+            #  2) Exactly 1 connected (must be the last human, since bots
+            #     don't disconnect) → emit game_over with that human as winner.
+            #  3) No humans left (only bots may remain) → cancel bot timers,
+            #     emit game_over with no winner, reset to LOBBY.
+            if self.session.human_connected_count() < 1:
+                self.bots.cancel_all()
+                self._broadcast_session({
+                    "type":            "game_over",
+                    "winner_index":    None,
+                    "winner_username": None,
+                })
+                self._reset_to_lobby()
+            elif self.session.connected_count() < 2:
+                last = self.session.game.winner
                 if last is None:
-                    # Try to declare the last connected player winner.
                     for idx, player in enumerate(self.session.game.players):
                         if player.color not in self.session.disconnected_colors:
                             last = idx

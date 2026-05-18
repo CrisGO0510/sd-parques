@@ -17,17 +17,23 @@ describe('lobbyStore', () => {
     const s = useLobbyStore();
     expect(s.canStart).toBe(false);
     s.updateFromLobbyUpdate(
-      [{ username: 'A', color: Color.RED }],
+      [{ username: 'A', color: Color.RED, is_bot: false }],
       [Color.BLUE, Color.GREEN, Color.YELLOW],
     );
     expect(s.canStart).toBe(false);  // only 1 player
     s.updateFromLobbyUpdate(
-      [{ username: 'A', color: Color.RED }, { username: 'B', color: null }],
+      [
+        { username: 'A', color: Color.RED, is_bot: false },
+        { username: 'B', color: null,      is_bot: false },
+      ],
       [Color.BLUE, Color.GREEN, Color.YELLOW],
     );
     expect(s.canStart).toBe(false);  // B has no color
     s.updateFromLobbyUpdate(
-      [{ username: 'A', color: Color.RED }, { username: 'B', color: Color.BLUE }],
+      [
+        { username: 'A', color: Color.RED,  is_bot: false },
+        { username: 'B', color: Color.BLUE, is_bot: false },
+      ],
       [Color.GREEN, Color.YELLOW],
     );
     expect(s.canStart).toBe(true);
@@ -40,5 +46,18 @@ describe('lobbyStore', () => {
     s.reset();
     expect(s.isHost).toBe(false);
     expect(s.myColor).toBeNull();
+  });
+
+  it('stores is_bot flag from lobby_update', () => {
+    const s = useLobbyStore();
+    s.updateFromLobbyUpdate(
+      [
+        { username: 'Cris',     color: Color.RED,  is_bot: false },
+        { username: 'Bot Azul', color: Color.BLUE, is_bot: true  },
+      ],
+      [Color.GREEN, Color.YELLOW],
+    );
+    expect(s.players[1]!.is_bot).toBe(true);
+    expect(s.players[0]!.is_bot).toBe(false);
   });
 });

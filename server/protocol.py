@@ -43,6 +43,8 @@ COMMAND_SCHEMAS: dict[str, dict[str, type]] = {
     "skip_turn":      {},
     "crown_piece":    {"piece_index": int},
     "leave":          {},
+    "add_bot":        {},
+    "remove_bot":     {"color": str},
     "chat":           {"message": str},
     "time_response": {"client_time": int},
     "verify_player":  {"username": str},

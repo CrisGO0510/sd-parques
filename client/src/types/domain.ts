@@ -42,6 +42,7 @@ export interface PlayerDto {
   name: string;
   color: Color;
   pieces: PieceDto[];
+  is_bot: boolean;
 }
 
 export interface GameStateDto {
@@ -72,4 +73,5 @@ export interface MoveResultDto {
 export interface LobbyPlayerDto {
   username: string;
   color: Color | null;
+  is_bot: boolean;
 }

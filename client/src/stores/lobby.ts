@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { Color, LobbyPlayerDto } from 'src/types/domain';
+import { ClientCommandType } from 'src/types/protocol';
+import { useConnectionStore } from './connection';
 
 export const useLobbyStore = defineStore('lobby', () => {
   const players         = ref<LobbyPlayerDto[]>([]);
@@ -27,6 +29,16 @@ export const useLobbyStore = defineStore('lobby', () => {
     myColor.value = null;
   }
 
+  function addBot(): void {
+    const conn = useConnectionStore();
+    conn.send({ type: ClientCommandType.ADD_BOT });
+  }
+
+  function removeBot(color: Color): void {
+    const conn = useConnectionStore();
+    conn.send({ type: ClientCommandType.REMOVE_BOT, color });
+  }
+
   return { players, availableColors, isHost, myColor, canStart,
-           updateFromLobbyUpdate, reset };
+           updateFromLobbyUpdate, reset, addBot, removeBot };
 });

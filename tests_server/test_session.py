@@ -1,6 +1,6 @@
 import pytest
 
-from server.session import GameSession
+from server.session import GameSession, SessionEntry
 from core.entities import Color, GamePhase, PieceState
 from tests.conftest import ScriptedRandom
 
@@ -8,8 +8,8 @@ from tests.conftest import ScriptedRandom
 def _make_session(rng: ScriptedRandom | None = None) -> GameSession:
     return GameSession(
         entries=[
-            ("c1", "Alice", Color.RED),
-            ("c2", "Bob",   Color.BLUE),
+            SessionEntry("c1", "Alice", Color.RED,  False),
+            SessionEntry("c2", "Bob",   Color.BLUE, False),
         ],
         rng=rng or ScriptedRandom([]),
     )

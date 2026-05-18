@@ -15,6 +15,7 @@
       <q-item-section>
         <q-item-label>
           {{ p.name }}
+          <q-badge v-if="p.is_bot" color="grey" class="q-ml-sm">BOT</q-badge>
           <q-badge v-if="isDisconnected(p)" color="grey" class="q-ml-sm">
             desconectado
           </q-badge>
