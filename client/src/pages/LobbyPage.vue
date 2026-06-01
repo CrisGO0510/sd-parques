@@ -18,7 +18,7 @@
                   {{ p.username }}
                   <q-badge v-if="p.is_bot" color="grey" class="q-ml-sm">BOT</q-badge>
                 </q-item-label>
-                <q-item-label caption>{{ p.color ?? 'sin color' }}</q-item-label>
+                <q-item-label caption>{{ colorToLabel(p.color) }}</q-item-label>
               </q-item-section>
               <q-item-section side v-if="lobby.isHost && p.is_bot && p.color">
                 <q-btn
@@ -42,7 +42,7 @@
             <q-btn
               v-for="c in lobby.availableColors"
               :key="c"
-              :label="c"
+              :label="colorToLabel(c)"
               :style="colorBtnStyle(c)"
               @click="onSelectColor(c)"
             />
@@ -134,6 +134,7 @@ import { Color } from 'src/types/domain';
 import { Route } from 'src/router/routes';
 
 import { computed, onMounted } from 'vue';
+import { colorToLabel } from 'src/utils/colorTranslations';
 
 const MAX_BOTS = 3;
 const MAX_PLAYERS = 4;

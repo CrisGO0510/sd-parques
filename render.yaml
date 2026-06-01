@@ -7,6 +7,8 @@ services:
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: DATABASE_URL
+        value: postgresql://sd_parques_db_user:25f9QZW4Vhyi1KGbD2Lhbgm8zp0zgOv1@dpg-d8eivvf40ujc73dl4110-a.ohio-postgres.render.com/sd_parques_db
 
   - type: static
     name: parques-client

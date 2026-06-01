@@ -69,7 +69,7 @@
         <q-separator spaced />
         <div class="text-caption text-grey">
           <div>phase: {{ game.phase ?? '—' }}</div>
-          <div>mi color: {{ game.myColor ?? '—' }}</div>
+          <div>mi color: {{ colorToLabel(game.myColor) }}</div>
           <div>es mi turno: {{ game.isMyTurn }}</div>
           <div>moves disponibles: {{ game.availableMoves.length }}</div>
           <div>dados: {{ game.state?.pending_dice.join(', ') ?? '—' }}</div>
@@ -127,6 +127,7 @@ import { ClientCommandType, ServerEventType } from 'src/types/protocol';
 import { GamePhase, PieceState } from 'src/types/domain';
 import type { Color, PieceDto, MoveDto } from 'src/types/domain';
 import { Route } from 'src/router/routes';
+import { colorToLabel } from 'src/utils/colorTranslations';
 
 const router = useRouter();
 const game   = useGameStore();

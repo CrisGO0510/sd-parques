@@ -5,7 +5,7 @@
         <div class="text-h5">Conectar al servidor</div>
       </q-card-section>
       <q-card-section>
-        <q-input v-model="host" label="Host" :rules="[v => !!v || 'Requerido']" />
+        <q-input v-model="host" label="Servidor" :rules="[v => !!v || 'Requerido']" />
         <q-input v-model.number="port" label="Puerto" type="number"
                  :rules="[(v: number) => (v >= 1 && v <= 65535) || 'Puerto inválido']" />
         <q-input v-model="username" label="Nombre de usuario"

@@ -1,56 +1,34 @@
 """Database configuration and connection management."""
 from __future__ import annotations
 
-import mysql.connector
-from mysql.connector import Error
-from decimal import Decimal
+import os
+import psycopg2
+from psycopg2 import Error
+from psycopg2.extras import RealDictCursor
 from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def convert_decimal(obj: any) -> any:
-    """Convert Decimal objects to int or float for JSON serialization."""
-    if isinstance(obj, dict):
-        return {k: convert_decimal(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_decimal(item) for item in obj]
-    elif isinstance(obj, Decimal):
-        return float(obj) if obj % 1 else int(obj)
-    return obj
-
-
 class DatabaseConfig:
-    """Configuration for MySQL database connection."""
+    """Configuration for PostgreSQL database connection."""
     
-    def __init__(
-        self,
-        host: str = "localhost",
-        user: str = "root",
-        password: str = "",
-        database: str = "sd_parques",
-        port: int = 3306,
-    ):
-        self.host = host
-        self.user = user
-        self.password = password
-        self.database = database
-        self.port = port
+    def __init__(self, database_url: str | None = None):
+        # Use DATABASE_URL from environment (Render provides this automatically)
+        # Fallback to local PostgreSQL if not in production
+        self.database_url = database_url or os.getenv(
+            "DATABASE_URL",
+            "postgresql://postgres:postgres@localhost:5432/sd_parques"
+        )
 
     def get_connection(self):
         """Create and return a new database connection."""
         try:
-            conn = mysql.connector.connect(
-                host=self.host,
-                user=self.user,
-                password=self.password,
-                database=self.database,
-                port=self.port,
-            )
+            conn = psycopg2.connect(self.database_url)
             return conn
         except Error as e:
-            logger.error(f"Error connecting to MySQL: {e}")
+            logger.error(f"Error connecting to PostgreSQL: {e}")
             raise
 
 
@@ -66,7 +44,7 @@ class PlayerDatabase:
         Returns a dict with player data including stats.
         """
         conn = self.db_config.get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         try:
             # Check if player exists
@@ -77,7 +55,7 @@ class PlayerDatabase:
             result = cursor.fetchone()
             
             if result:
-                return convert_decimal(result)
+                return dict(result)
             
             # Create new player
             cursor.execute(
@@ -91,7 +69,7 @@ class PlayerDatabase:
                 "SELECT id, username, games_played, games_won FROM players WHERE username = %s",
                 (username,)
             )
-            return convert_decimal(cursor.fetchone())
+            return dict(cursor.fetchone())
             
         finally:
             cursor.close()
@@ -100,7 +78,7 @@ class PlayerDatabase:
     def get_player_by_id(self, player_id: int) -> Optional[dict]:
         """Get player data by ID."""
         conn = self.db_config.get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         try:
             cursor.execute(
@@ -108,7 +86,7 @@ class PlayerDatabase:
                 (player_id,)
             )
             result = cursor.fetchone()
-            return convert_decimal(result) if result else None
+            return dict(result) if result else None
         finally:
             cursor.close()
             conn.close()
@@ -116,7 +94,7 @@ class PlayerDatabase:
     def get_all_players(self) -> list[dict]:
         """Get all players sorted by win percentage."""
         conn = self.db_config.get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         try:
             cursor.execute(
@@ -127,7 +105,7 @@ class PlayerDatabase:
                     games_played, 
                     games_won,
                     CASE 
-                        WHEN games_played > 0 THEN ROUND((games_won / games_played) * 100, 2)
+                        WHEN games_played > 0 THEN ROUND((CAST(games_won AS float) / games_played) * 100, 2)
                         ELSE 0
                     END as win_percentage
                 FROM players
@@ -135,7 +113,7 @@ class PlayerDatabase:
                 """
             )
             result = cursor.fetchall()
-            return [convert_decimal(row) for row in result]
+            return [dict(row) for row in result]
         finally:
             cursor.close()
             conn.close()
@@ -147,7 +125,7 @@ class PlayerDatabase:
         Returns updated player data.
         """
         conn = self.db_config.get_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         
         try:
             # Increment games_played
@@ -170,7 +148,7 @@ class PlayerDatabase:
                 "SELECT id, username, games_played, games_won FROM players WHERE id = %s",
                 (player_id,)
             )
-            return convert_decimal(cursor.fetchone())
+            return dict(cursor.fetchone())
             
         finally:
             cursor.close()
