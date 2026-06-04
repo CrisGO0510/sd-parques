@@ -17,8 +17,22 @@ function buildWebSocketUrl(host: string, port: number): string {
     return configuredUrl;
   }
 
-  const protocol = globalThis.location?.protocol === 'https:' ? 'wss' : 'ws';
-  return `${protocol}://${host}:${port}`;
+  const raw = host.trim();
+
+  // Permite pegar una URL completa en el campo "Servidor" (ws://, wss://, o
+  // http(s):// equivalentes). Imprescindible en el APK: ahí el WebView corre
+  // sobre http://localhost, así que no podemos inferir wss del protocolo de la
+  // página — el esquema debe venir del destino, no del origen.
+  if (/^(wss?|https?):\/\//i.test(raw)) {
+    const u = new URL(raw);
+    const scheme = u.protocol === 'https:' || u.protocol === 'wss:' ? 'wss' : 'ws';
+    return `${scheme}://${u.hostname}${u.port ? `:${u.port}` : ''}`;
+  }
+
+  // Host "pelado": usar wss para el puerto TLS estándar (443) o si la página ya
+  // es https; ws en cualquier otro caso (p. ej. servidor local en :5001).
+  const secure = port === 443 || globalThis.location?.protocol === 'https:';
+  return `${secure ? 'wss' : 'ws'}://${raw}:${port}`;
 }
 
 export const useConnectionStore = defineStore('connection', () => {

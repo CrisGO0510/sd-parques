@@ -105,7 +105,7 @@ class PlayerDatabase:
                     games_played, 
                     games_won,
                     CASE 
-                        WHEN games_played > 0 THEN ROUND((CAST(games_won AS float) / games_played) * 100, 2)
+                        WHEN games_played > 0 THEN ROUND((CAST(games_won AS numeric) / games_played) * 100, 2)
                         ELSE 0
                     END as win_percentage
                 FROM players

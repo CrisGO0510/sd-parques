@@ -32,6 +32,24 @@ describe('connectionStore', () => {
     expect(store.username).toBe('Alice');
   });
 
+  it('builds wss:// when given a full wss:// URL (port ignored)', () => {
+    const store = useConnectionStore();
+    void store.connect('wss://sd-parques-web.onrender.com', 443, 'A');
+    expect(mock.instances[0]!.url).toBe('wss://sd-parques-web.onrender.com');
+  });
+
+  it('builds wss:// for a bare host on port 443', () => {
+    const store = useConnectionStore();
+    void store.connect('sd-parques-web.onrender.com', 443, 'A');
+    expect(mock.instances[0]!.url).toBe('wss://sd-parques-web.onrender.com:443');
+  });
+
+  it('builds ws:// for a local host/port', () => {
+    const store = useConnectionStore();
+    void store.connect('localhost', 5001, 'A');
+    expect(mock.instances[0]!.url).toBe('ws://localhost:5001');
+  });
+
   it('send() writes serialized JSON to the socket', async () => {
     const store = useConnectionStore();
     const promise = store.connect('localhost', 5001, 'Alice');
