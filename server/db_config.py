@@ -113,7 +113,14 @@ class PlayerDatabase:
                 """
             )
             result = cursor.fetchall()
-            return [dict(row) for row in result]
+            # `win_percentage` llega como Decimal (columna numeric) y no es
+            # serializable a JSON; lo convertimos a float para el protocolo.
+            players = []
+            for row in result:
+                player = dict(row)
+                player["win_percentage"] = float(player["win_percentage"])
+                players.append(player)
+            return players
         finally:
             cursor.close()
             conn.close()
