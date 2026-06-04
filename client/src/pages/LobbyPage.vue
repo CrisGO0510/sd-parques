@@ -16,21 +16,8 @@
               <q-item-section>
                 <q-item-label>
                   {{ p.username }}
-                  <q-badge v-if="p.is_bot" color="grey" class="q-ml-sm">BOT</q-badge>
                 </q-item-label>
                 <q-item-label caption>{{ colorToLabel(p.color) }}</q-item-label>
-              </q-item-section>
-              <q-item-section side v-if="lobby.isHost && p.is_bot && p.color">
-                <q-btn
-                  flat
-                  dense
-                  round
-                  icon="close"
-                  size="sm"
-                  color="negative"
-                  :aria-label="`Quitar ${p.username}`"
-                  @click="onRemoveBot(p.color)"
-                />
               </q-item-section>
             </q-item>
           </q-list>
@@ -53,13 +40,6 @@
           <q-btn color="positive" size="lg" :disable="!lobby.canStart" @click="onStart">
             Iniciar partida
           </q-btn>
-          <q-btn
-            v-if="canAddBot"
-            color="secondary"
-            icon="smart_toy"
-            label="Agregar bot"
-            @click="onAddBot"
-          />
         </div>
         <div v-else class="text-caption">Esperando al host…</div>
       </div>
@@ -133,11 +113,8 @@ import { ClientCommandType, ServerEventType } from 'src/types/protocol';
 import { Color } from 'src/types/domain';
 import { Route } from 'src/router/routes';
 
-import { computed, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import { colorToLabel } from 'src/utils/colorTranslations';
-
-const MAX_BOTS = 3;
-const MAX_PLAYERS = 4;
 
 const router = useRouter();
 const lobby  = useLobbyStore();
@@ -215,21 +192,6 @@ function onSelectColor(c: Color): void {
 
 function onStart(): void {
   send({ type: ClientCommandType.START_GAME });
-}
-
-const canAddBot = computed<boolean>(() =>
-  lobby.isHost
-  && lobby.players.length < MAX_PLAYERS
-  && lobby.players.filter(p => p.is_bot).length < MAX_BOTS
-  && lobby.availableColors.length > 0,
-);
-
-function onAddBot(): void {
-  lobby.addBot();
-}
-
-function onRemoveBot(color: Color): void {
-  lobby.removeBot(color);
 }
 
 async function loadRanking(): Promise<void> {

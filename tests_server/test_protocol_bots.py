@@ -1,4 +1,4 @@
-"""Pruebas de validate_command para add_bot/remove_bot."""
+"""add_bot/remove_bot ya no son comandos válidos del protocolo."""
 from __future__ import annotations
 
 import pytest
@@ -6,19 +6,11 @@ import pytest
 from server.protocol import ProtocolError, validate_command
 
 
-def test_add_bot_accepts_no_payload():
-    validate_command({"type": "add_bot"})
+def test_add_bot_is_unknown_type():
+    with pytest.raises(ProtocolError, match="unknown type"):
+        validate_command({"type": "add_bot"})
 
 
-def test_remove_bot_requires_color_string():
-    validate_command({"type": "remove_bot", "color": "red"})
-
-
-def test_remove_bot_rejects_missing_color():
-    with pytest.raises(ProtocolError):
-        validate_command({"type": "remove_bot"})
-
-
-def test_remove_bot_rejects_non_string_color():
-    with pytest.raises(ProtocolError):
-        validate_command({"type": "remove_bot", "color": 42})
+def test_remove_bot_is_unknown_type():
+    with pytest.raises(ProtocolError, match="unknown type"):
+        validate_command({"type": "remove_bot", "color": "green"})

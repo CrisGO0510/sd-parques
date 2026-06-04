@@ -12,7 +12,7 @@ from core.entities import Color
 from core.exceptions import DomainError, DuplicatePlayer, InvalidMove, WrongPhase
 from server.bot_runner import BotRunner, DelayFn
 from server.connection import ClientConnection
-from server.lobby import Lobby, MAX_BOTS, MAX_PLAYERS
+from server.lobby import Lobby, LobbyFull
 from server.protocol import ProtocolError, decode, encode, validate_command
 from server.session import GameSession, SessionEntry
 from server.recommender import recommend
@@ -33,6 +33,7 @@ DOMAIN_ERROR_CODES = {
     DuplicatePlayer: "DUPLICATE_PLAYER",
     WrongPhase:      "WRONG_PHASE",
     InvalidMove:     "INVALID_MOVE",
+    LobbyFull:       "LOBBY_FULL",
 }
 
 
@@ -157,11 +158,9 @@ class Server:
             if self.phase is ServerPhase.LOBBY:
                 self.lobby.leave(conn.conn_id)
                 self.unregister_connection(conn.conn_id)
-                # Si tras la salida no quedan humanos pero sí bots, limpiar
-                # bots huérfanos: no tiene sentido mantenerlos sin host.
-                if (self.lobby.host_conn_id() is None
-                        and any(p.is_bot for p in self.lobby.players())):
-                    self.lobby.clear_bots()
+                # Si tras la salida no quedan humanos, el lobby se reinicia
+                # limpio (vuelve a tener solo los 2 bots fijos).
+                self._reset_lobby_if_no_humans()
                 self._broadcast_lobby(self._lobby_update())
             elif self.phase is ServerPhase.IN_GAME:
                 self._handle_ingame_leave(conn)
@@ -236,6 +235,17 @@ class Server:
         self.phase = ServerPhase.LOBBY
         self.lobby = Lobby()
         self.session = None
+
+    def _reset_lobby_if_no_humans(self) -> None:
+        """Si estamos en LOBBY y no queda ningún humano, descarta el lobby
+        actual y crea uno nuevo (re-sembrado con los 2 bots fijos), listo para
+        nuevos jugadores. Caller must hold `self.lock`."""
+        if self.phase is not ServerPhase.LOBBY:
+            return
+        if any(not p.is_bot for p in self.lobby.players()):
+            return
+        logger.info("lobby sin humanos → reiniciando lobby")
+        self.lobby = Lobby()
 
     def register_connection(self, conn) -> None:
         """Make the server aware of a new connection (before any message arrives)."""
@@ -380,55 +390,10 @@ class Server:
             )
             sync_thread.start()
             self._start_game()
-        elif t == "add_bot":
-            host_conn_id = self.lobby.host_conn_id()
-            if host_conn_id != conn.conn_id:
-                self._send_error(conn, "FORBIDDEN",
-                                 "only the host can add bots")
-                return
-            bot_count = sum(1 for p in self.lobby.players() if p.is_bot)
-            if bot_count >= MAX_BOTS:
-                self._send_error(conn, "FORBIDDEN", f"max {MAX_BOTS} bots")
-                return
-            if len(self.lobby.players()) >= MAX_PLAYERS:
-                self._send_error(conn, "FORBIDDEN", "lobby is full")
-                return
-            available = self.lobby.available_colors()
-            if not available:
-                self._send_error(conn, "FORBIDDEN", "no colors available")
-                return
-            try:
-                self.lobby.add_bot(available[0])
-            except DomainError as e:
-                self._send_error(conn, self._domain_error_code(e), str(e))
-                return
-            self._broadcast_lobby(self._lobby_update())
-        elif t == "remove_bot":
-            host_conn_id = self.lobby.host_conn_id()
-            if host_conn_id != conn.conn_id:
-                self._send_error(conn, "FORBIDDEN",
-                                 "only the host can remove bots")
-                return
-            try:
-                color = Color(msg["color"])
-            except ValueError:
-                self._send_error(conn, "BAD_MESSAGE",
-                                 f"invalid color: {msg['color']}")
-                return
-            target = next(
-                (p for p in self.lobby.players()
-                 if p.color is color and p.is_bot),
-                None,
-            )
-            if target is None:
-                self._send_error(conn, "BAD_MESSAGE",
-                                 f"no bot with color {color.value}")
-                return
-            self.lobby.remove_bot(target.conn_id)
-            self._broadcast_lobby(self._lobby_update())
         elif t == "leave":
             self.lobby.leave(conn.conn_id)
             self.unregister_connection(conn.conn_id)
+            self._reset_lobby_if_no_humans()
             self._broadcast_lobby(self._lobby_update())
         else:
             self._send_error(conn, "WRONG_PHASE", f"{t} not allowed in LOBBY")

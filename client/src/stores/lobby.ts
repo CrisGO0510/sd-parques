@@ -1,8 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { Color, LobbyPlayerDto } from 'src/types/domain';
-import { ClientCommandType } from 'src/types/protocol';
-import { useConnectionStore } from './connection';
 
 export const useLobbyStore = defineStore('lobby', () => {
   const players         = ref<LobbyPlayerDto[]>([]);
@@ -10,8 +8,11 @@ export const useLobbyStore = defineStore('lobby', () => {
   const isHost          = ref<boolean>(false);
   const myColor         = ref<Color | null>(null);
 
+  // Puede iniciar si hay al menos 1 humano y todos los jugadores (humanos y
+  // bots) tienen color. Los 2 bots fijos ya vienen con color.
   const canStart = computed<boolean>(() =>
-    players.value.length >= 2 && players.value.every(p => p.color !== null)
+    players.value.some(p => !p.is_bot) &&
+    players.value.every(p => p.color !== null),
   );
 
   function updateFromLobbyUpdate(
@@ -29,16 +30,6 @@ export const useLobbyStore = defineStore('lobby', () => {
     myColor.value = null;
   }
 
-  function addBot(): void {
-    const conn = useConnectionStore();
-    conn.send({ type: ClientCommandType.ADD_BOT });
-  }
-
-  function removeBot(color: Color): void {
-    const conn = useConnectionStore();
-    conn.send({ type: ClientCommandType.REMOVE_BOT, color });
-  }
-
   return { players, availableColors, isHost, myColor, canStart,
-           updateFromLobbyUpdate, reset, addBot, removeBot };
+           updateFromLobbyUpdate, reset };
 });

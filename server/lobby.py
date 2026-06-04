@@ -1,4 +1,11 @@
-"""Lobby: tracks players waiting for a game to start."""
+"""Lobby: tracks players waiting for a game to start.
+
+Modelo fijo: máximo 2 jugadores humanos + 2 bots fijos (Camila=GREEN,
+Bryan=YELLOW). Los bots se siembran al construir el Lobby y nunca se quitan
+manualmente; los humanos eligen entre los colores restantes (RED y BLUE).
+El orden de turnos queda intercalado: RED (humano) -> GREEN (Camila) ->
+BLUE (humano) -> YELLOW (Bryan).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,18 +19,18 @@ class LobbyError(DomainError):
 
 
 class LobbyFull(LobbyError):
-    """The lobby already has 4 players, or the bot cap has been reached."""
+    """El lobby ya tiene sus 2 jugadores humanos."""
 
 
 MAX_PLAYERS = 4
-MAX_BOTS = 3
+MAX_HUMANS = 2
 BOT_CONN_PREFIX = "bot:"
 
-_BOT_NAME_BY_COLOR: dict[Color, str] = {
-    Color.RED:    "Bot Rojo",
-    Color.BLUE:   "Bot Azul",
-    Color.GREEN:  "Bot Verde",
-    Color.YELLOW: "Bot Amarillo",
+# Bots fijos por color. Camila y Bryan ocupan GREEN y YELLOW; los humanos
+# eligen entre RED y BLUE.
+FIXED_BOTS: dict[Color, str] = {
+    Color.GREEN:  "Camila",
+    Color.YELLOW: "Bryan",
 }
 
 
@@ -40,18 +47,32 @@ class LobbyPlayer:
     is_bot: bool = False
 
 
+def _seed_bots() -> list[LobbyPlayer]:
+    """Crea los 2 bots fijos con su color asignado (se usa al construir el Lobby)."""
+    return [
+        LobbyPlayer(
+            conn_id=f"{BOT_CONN_PREFIX}{color.value}",
+            username=name,
+            is_host=False,
+            color=color,
+            is_bot=True,
+        )
+        for color, name in FIXED_BOTS.items()
+    ]
+
+
 @dataclass
 class Lobby:
-    _players: list[LobbyPlayer] = field(default_factory=list)
+    _players: list[LobbyPlayer] = field(default_factory=_seed_bots)
 
     def join(self, conn_id: str, username: str) -> LobbyPlayer:
-        if len(self._players) >= MAX_PLAYERS:
-            raise LobbyFull("lobby is full (max 4 players)")
+        human_count = sum(1 for p in self._players if not p.is_bot)
+        if human_count >= MAX_HUMANS:
+            raise LobbyFull("máximo 2 jugadores")
         if any(p.username == username for p in self._players):
             raise DuplicatePlayer(f"duplicate name: {username}")
-        # Invariante: host siempre humano. Si no hay host (caso del primer
-        # humano que entra a un lobby vacío o con solo bots), este humano
-        # asume host.
+        # Invariante: host siempre humano. El primer humano que entra (no hay
+        # host, porque los bots no son host) asume host.
         has_host = any(p.is_host for p in self._players)
         player = LobbyPlayer(
             conn_id=conn_id,
@@ -61,38 +82,6 @@ class Lobby:
         )
         self._players.append(player)
         return player
-
-    def add_bot(self, color: Color) -> LobbyPlayer:
-        # Chequear cota de bots primero — si ya hay 3 bots con la sala no llena,
-        # el rechazo debe ser por la regla de bots, no por capacidad.
-        bot_count = sum(1 for p in self._players if p.is_bot)
-        if bot_count >= MAX_BOTS:
-            raise LobbyFull(f"max {MAX_BOTS} bots")
-        if len(self._players) >= MAX_PLAYERS:
-            raise LobbyFull("lobby is full (max 4 players)")
-        if any(p.color is color for p in self._players):
-            raise DuplicatePlayer(f"color {color.value} already taken")
-        bot = LobbyPlayer(
-            conn_id=f"{BOT_CONN_PREFIX}{color.value}",
-            username=_BOT_NAME_BY_COLOR[color],
-            is_host=False,
-            color=color,
-            is_bot=True,
-        )
-        self._players.append(bot)
-        return bot
-
-    def remove_bot(self, conn_id: str) -> None:
-        target = self.get_by_conn(conn_id)
-        if target is None:
-            raise LobbyError(f"connection {conn_id} not in lobby")
-        if not target.is_bot:
-            raise LobbyError(f"connection {conn_id} is not a bot")
-        self._players = [p for p in self._players if p.conn_id != conn_id]
-
-    def clear_bots(self) -> None:
-        """Remove every bot. Used when the last human leaves the lobby."""
-        self._players = [p for p in self._players if not p.is_bot]
 
     def leave(self, conn_id: str) -> None:
         was_host = any(p.conn_id == conn_id and p.is_host for p in self._players)
@@ -134,10 +123,7 @@ class Lobby:
         return [c for c in Color if c not in taken]
 
     def can_start(self) -> bool:
-        if not 2 <= len(self._players) <= MAX_PLAYERS:
+        humans = [p for p in self._players if not p.is_bot]
+        if not humans:
             return False
-        if not all(p.color is not None for p in self._players):
-            return False
-        if not any(not p.is_bot for p in self._players):
-            return False
-        return True
+        return all(p.color is not None for p in humans)

@@ -1,12 +1,14 @@
 """End-to-end integration tests using real TCP sockets."""
 from __future__ import annotations
 
-from tests.conftest import ScriptedRandom
+import random
+import time
+
+from tests_server.conftest import inline_bot_delay
 
 
 def test_lobby_flow_end_to_end(server_factory, client_factory):
-    rng = ScriptedRandom([6, 5, 3, 4])  # initial rolls
-    host, port = server_factory(rng=rng)
+    host, port = server_factory(rng=random.Random(0))
 
     alice = client_factory(host, port)
     bob = client_factory(host, port)
@@ -36,30 +38,24 @@ def test_lobby_flow_end_to_end(server_factory, client_factory):
     assert alice_started and bob_started
 
 
-def test_game_ends_when_everyone_disconnects_except_one(server_factory, client_factory):
-    rng = ScriptedRandom([6, 5, 3, 4])
-    host, port = server_factory(rng=rng)
+def test_game_resets_to_lobby_when_last_human_leaves(server_factory, client_factory):
+    """1 humano + 2 bots: cuando el humano deja la partida, el server vuelve a
+    LOBBY y un cliente nuevo entra limpio como host."""
+    host, port = server_factory(rng=random.Random(0), bot_delay_fn=inline_bot_delay)
 
     alice = client_factory(host, port)
-    bob = client_factory(host, port)
-
     alice.send({"type": "join", "username": "Alice"})
-    bob.send({"type": "join", "username": "Bob"})
-    alice.drain(timeout=0.5)
-    bob.drain(timeout=0.5)
+    alice.drain(expected_count=2, timeout=1.0)
     alice.send({"type": "select_color", "color": "red"})
-    bob.send({"type": "select_color", "color": "blue"})
-    alice.drain(timeout=0.5)
-    bob.drain(timeout=0.5)
+    alice.drain(expected_count=1, timeout=1.0)
     alice.send({"type": "start_game"})
     alice.drain(timeout=0.5)
-    bob.drain(timeout=0.5)
 
-    # Bob disconnects.
-    bob.close()
+    alice.close()
+    time.sleep(0.4)
 
-    # Alice should eventually receive a game_over.
-    msgs = alice.drain(expected_count=5, timeout=2.0)
-    game_overs = [m for m in msgs if m["type"] == "game_over"]
-    assert game_overs
-    assert game_overs[0]["winner_username"] == "Alice"
+    other = client_factory(host, port)
+    other.send({"type": "join", "username": "Bob"})
+    events = other.drain(expected_count=2, timeout=1.0)
+    welcome = next(e for e in events if e["type"] == "welcome")
+    assert welcome["is_host"] is True
